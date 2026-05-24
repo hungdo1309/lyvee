@@ -70,9 +70,9 @@ export function formatTagLabel(tag: string): string {
 }
 
 const TAG_PALETTE = [
-  { bg: '#F3F4F6', text: '#4B5563' },
-  { bg: '#EFF6FF', text: '#2563EB' },
-  { bg: '#F5F3FF', text: '#7C3AED' },
+  { bg: '#EFEBF7', text: '#6E6785' },
+  { bg: '#F0ECFA', text: '#7A6FD8' },
+  { bg: '#F5F2FA', text: '#5C51B8' },
   { bg: '#ECFDF5', text: '#059669' },
   { bg: '#FFF7ED', text: '#D97706' },
   { bg: '#FDF2F8', text: '#DB2777' },

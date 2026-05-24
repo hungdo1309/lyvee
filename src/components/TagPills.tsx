@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { formatTagLabel, getTagStyle } from '../utils/tags';
-import { radius, spacing } from '../constants/theme';
+import { colors, radius, spacing } from '../constants/theme';
 
 interface TagPillsProps {
   tags: string[];
@@ -101,6 +101,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   overflow: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.iconBg,
   },
 });

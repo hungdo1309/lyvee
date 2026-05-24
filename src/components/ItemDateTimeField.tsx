@@ -201,9 +201,9 @@ const styles = StyleSheet.create({
   },
   segmentActive: {
     backgroundColor: colors.surface,
-    shadowColor: '#000',
+    shadowColor: colors.primaryDark,
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.12,
     shadowRadius: 2,
     elevation: 1,
   },
@@ -249,6 +249,6 @@ const styles = StyleSheet.create({
   confirmButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.onPrimary,
   },
 });

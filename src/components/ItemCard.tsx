@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   checkmark: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontSize: 12,
     fontWeight: '700',
   },

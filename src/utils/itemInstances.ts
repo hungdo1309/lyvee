@@ -12,6 +12,7 @@ import {
   format,
 } from 'date-fns';
 import { Item } from '../types';
+import { itemTypeConfig } from '../constants/theme';
 import {
   getOccurrencesInRange,
   getUpcomingOccurrences,
@@ -404,12 +405,7 @@ export function getMarkedDatesFromItems(
     if (!marked[key]) {
       marked[key] = { marked: true, dots: [] };
     }
-    const color =
-      instance.item.type === 'task'
-        ? '#2563EB'
-        : instance.item.type === 'activity'
-          ? '#7C3AED'
-          : '#059669';
+    const color = itemTypeConfig[instance.item.type].color;
     if ((marked[key].dots?.length ?? 0) < 3) {
       marked[key].dots!.push({ color });
     }

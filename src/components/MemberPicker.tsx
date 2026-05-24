@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   avatarTextSelected: {
-    color: '#fff',
+    color: colors.onPrimary,
   },
   name: {
     fontSize: 12,

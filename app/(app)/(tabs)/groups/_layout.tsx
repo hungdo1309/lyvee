@@ -1,4 +1,5 @@
 import { Stack } from 'expo-router';
+import { colors } from '../../../../src/constants/theme';
 
 export default function GroupsLayout() {
   return (
@@ -6,7 +7,9 @@ export default function GroupsLayout() {
       screenOptions={{
         headerShown: true,
         headerBackTitle: 'Groups',
-        headerTintColor: '#2563EB',
+        headerTintColor: colors.primary,
+        headerStyle: { backgroundColor: colors.background },
+        headerShadowVisible: false,
       }}
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />

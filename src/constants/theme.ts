@@ -1,21 +1,32 @@
+/** Lyvee brand palette — aligned with app icon and splash screen. */
+export const brand = {
+  purple: '#7A6FD8',
+  purpleDark: '#5C51B8',
+  purpleLight: '#9B8FE8',
+  lavender: '#EDE8F5',
+  lavenderSoft: '#F5F2FA',
+};
+
 export const colors = {
-  background: '#F7F7F5',
+  background: brand.lavender,
   surface: '#FFFFFF',
-  primary: '#007AFF',
-  primaryLight: '#EBF5FF',
-  text: '#1C1C1E',
-  textSecondary: '#6B7280',
-  textMuted: '#9CA3AF',
-  border: '#E5E7EB',
-  borderLight: '#F0F0F0',
+  primary: brand.purple,
+  primaryDark: brand.purpleDark,
+  primaryLight: '#F0ECFA',
+  text: '#1A1528',
+  textSecondary: '#6E6785',
+  textMuted: '#9A94AB',
+  border: '#DDD4F5',
+  borderLight: '#EFEBF7',
   error: '#DC2626',
   success: '#34C759',
   warning: '#FF9500',
-  task: '#FF9500',
-  activity: '#5856D6',
-  document: '#34C759',
-  overlay: 'rgba(0, 0, 0, 0.4)',
-  iconBg: '#F2F2F7',
+  task: '#F59E0B',
+  activity: brand.purple,
+  document: '#10B981',
+  overlay: 'rgba(26, 21, 40, 0.45)',
+  iconBg: brand.lavenderSoft,
+  onPrimary: '#FFFFFF',
 };
 
 /** 8 / 16 / 24 / 32 spacing scale */
@@ -80,11 +91,18 @@ export const typography = {
 
 export const shadows = {
   card: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowColor: brand.purpleDark,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 2,
+  },
+  fab: {
+    shadowColor: brand.purpleDark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    elevation: 6,
   },
 };
 

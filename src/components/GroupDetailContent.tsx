@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
   },
   memberAvatarText: {
-    color: '#fff',
+    color: colors.onPrimary,
     fontWeight: '700',
     fontSize: 14,
     letterSpacing: -0.5,

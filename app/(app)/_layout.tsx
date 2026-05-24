@@ -23,6 +23,8 @@ export default function AppLayout() {
           title: 'Send Feedback',
           headerBackTitle: 'Settings',
           headerTintColor: colors.primary,
+          headerStyle: { backgroundColor: colors.background },
+          headerShadowVisible: false,
         }}
       />
     </Stack>

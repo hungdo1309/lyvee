@@ -41,7 +41,7 @@ export function Button({
     >
       {loading ? (
         <ActivityIndicator
-          color={variant === 'primary' ? '#fff' : colors.primary}
+          color={variant === 'primary' ? colors.onPrimary : colors.primary}
         />
       ) : (
         <Text style={[styles.text, styles[`text_${variant}`]]}>{title}</Text>
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   text_primary: {
-    color: '#FFFFFF',
+    color: colors.onPrimary,
   },
   text_secondary: {
     color: colors.primary,

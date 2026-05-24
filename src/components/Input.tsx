@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, TextInput, Text, StyleSheet, TextInputProps } from 'react-native';
 import { colors, radius, spacing, typography } from '../constants/theme';
 
@@ -8,16 +8,31 @@ interface InputProps extends TextInputProps {
 }
 
 export const Input = React.forwardRef<TextInput, InputProps>(function Input(
-  { label, error, style, ...props },
+  { label, error, style, onFocus, onBlur, ...props },
   ref
 ) {
+  const [focused, setFocused] = useState(false);
+
   return (
     <View style={styles.container}>
       {label && <Text style={styles.label}>{label}</Text>}
       <TextInput
         ref={ref}
-        style={[styles.input, error && styles.inputError, style]}
+        style={[
+          styles.input,
+          focused && !error && styles.inputFocused,
+          error && styles.inputError,
+          style,
+        ]}
         placeholderTextColor={colors.textMuted}
+        onFocus={(event) => {
+          setFocused(true);
+          onFocus?.(event);
+        }}
+        onBlur={(event) => {
+          setFocused(false);
+          onBlur?.(event);
+        }}
         {...props}
       />
       {error && <Text style={styles.error}>{error}</Text>}
@@ -35,13 +50,17 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     fontSize: 16,
     color: colors.text,
+  },
+  inputFocused: {
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
   },
   inputError: {
     borderColor: colors.error,
