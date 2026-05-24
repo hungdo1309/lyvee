@@ -17,15 +17,19 @@ import { ItemFormOptions } from '../../../src/components/ItemFormOptions';
 import { TagInput } from '../../../src/components/TagInput';
 import { GroupPicker } from '../../../src/components/GroupPicker';
 import { ItemDateTimeField } from '../../../src/components/ItemDateTimeField';
+import { ReminderPicker } from '../../../src/components/ReminderPicker';
 import { useGroupMembers } from '../../../src/hooks/useGroupMembers';
 import { updateItem } from '../../../src/services/items';
 import { colors, spacing, itemTypeConfig, itemTypeSupportsRecurring } from '../../../src/constants/theme';
 import {
   ItemType,
   ItemVisibility,
+  ItemReminderOffset,
   RecurringRule,
   DEFAULT_RECURRING_RULE,
+  defaultReminderForType,
 } from '../../../src/types';
+import { normalizeReminderOffset, resolveItemReminderOffset } from '../../../src/utils/reminders';
 import { toISODateTime } from '../../../src/utils/dates';
 import { getItemTags } from '../../../src/utils/tags';
 import { dismissItemFlow } from '../../../src/utils/navigation';
@@ -53,6 +57,7 @@ export default function EditItemScreen() {
   const [recurringRule, setRecurringRule] = useState<RecurringRule>(DEFAULT_RECURRING_RULE);
   const [hasDate, setHasDate] = useState(false);
   const [dateTime, setDateTime] = useState(new Date());
+  const [reminderOffset, setReminderOffset] = useState<ItemReminderOffset>('none');
   const [loading, setLoading] = useState(false);
 
   const resetForm = useCallback(() => {
@@ -67,6 +72,7 @@ export default function EditItemScreen() {
     setRecurringRule(item.recurringRule);
     setHasDate(!!item.dateTime);
     setDateTime(item.dateTime ? parseISO(item.dateTime) : new Date());
+    setReminderOffset(resolveItemReminderOffset(item));
   }, [item]);
 
   useEffect(() => {
@@ -77,6 +83,9 @@ export default function EditItemScreen() {
     setType(next);
     if (!itemTypeSupportsRecurring(next)) {
       setRecurringRule(DEFAULT_RECURRING_RULE);
+    }
+    if (hasDate && item?.reminderOffset === undefined) {
+      setReminderOffset(defaultReminderForType(next));
     }
   };
 
@@ -123,6 +132,7 @@ export default function EditItemScreen() {
           : DEFAULT_RECURRING_RULE,
         tags,
         dateTime: hasDate ? toISODateTime(dateTime) : null,
+        reminderOffset: normalizeReminderOffset(hasDate, type, reminderOffset),
       });
       dismissItemFlow();
     } catch (error: unknown) {
@@ -169,14 +179,32 @@ export default function EditItemScreen() {
       <View style={styles.dateSection}>
         <View style={styles.dateHeader}>
           <Text style={styles.sectionLabel}>{itemTypeConfig[type].dateTimeLabel}</Text>
-          <TouchableOpacity onPress={() => setHasDate(!hasDate)}>
+          <TouchableOpacity
+            onPress={() => {
+              if (hasDate) {
+                setHasDate(false);
+                setReminderOffset('none');
+              } else {
+                setHasDate(true);
+                setReminderOffset(defaultReminderForType(type));
+              }
+            }}
+          >
             <Text style={styles.toggle}>
               {hasDate ? 'Remove date' : 'Add date'}
             </Text>
           </TouchableOpacity>
         </View>
         {hasDate && (
-          <ItemDateTimeField value={dateTime} onChange={setDateTime} />
+          <>
+            <ItemDateTimeField value={dateTime} onChange={setDateTime} />
+            <ReminderPicker
+              value={reminderOffset}
+              onChange={setReminderOffset}
+              assignedTo={assignedTo}
+              groupMembers={groupMembers}
+            />
+          </>
         )}
       </View>
       <Input

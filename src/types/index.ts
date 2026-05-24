@@ -1,5 +1,40 @@
 export type ItemType = 'task' | 'activity' | 'document';
 
+export type ItemReminderOffset =
+  | 'none'
+  | 'at_time'
+  | '1h'
+  | '24h'
+  | '3d'
+  | '7d'
+  | '14d'
+  | '30d';
+
+export interface ReminderOption {
+  value: ItemReminderOffset;
+  label: string;
+}
+
+export const REMINDER_OPTIONS: ReminderOption[] = [
+  { value: 'none', label: 'Off' },
+  { value: 'at_time', label: 'At due time' },
+  { value: '1h', label: '1 hour before' },
+  { value: '24h', label: '1 day before' },
+  { value: '3d', label: '3 days before' },
+  { value: '7d', label: '1 week before' },
+  { value: '14d', label: '2 weeks before' },
+  { value: '30d', label: '30 days before' },
+];
+
+export function defaultReminderForType(type: ItemType): ItemReminderOffset {
+  if (type === 'document') return '30d';
+  return '24h';
+}
+
+export function getReminderOptionLabel(value: ItemReminderOffset): string {
+  return REMINDER_OPTIONS.find((option) => option.value === value)?.label ?? 'Off';
+}
+
 export type ItemVisibility = 'everyone' | 'private' | 'custom';
 
 export type RecurringFrequency =
@@ -53,6 +88,8 @@ export interface Item {
   assignedTo: string[];
   notes: string;
   tags: string[];
+  /** When to notify assignees (or visible members if unassigned). */
+  reminderOffset?: ItemReminderOffset;
   completed: boolean;
   /** Per-occurrence completion keys (yyyy-MM-dd) for recurring tasks */
   completedOccurrences?: string[];

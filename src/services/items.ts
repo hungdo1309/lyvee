@@ -17,6 +17,7 @@ import { itemTypeSupportsRecurring } from '../constants/theme';
 import { toOccurrenceKey } from '../utils/recurrence';
 import { normalizeTags } from '../utils/tags';
 import { filterVisibleItems, isItemVisibleToMember } from '../utils/itemVisibility';
+import { normalizeReminderOffset } from '../utils/reminders';
 
 export { filterVisibleItems, isItemVisibleToMember };
 
@@ -33,6 +34,11 @@ function normalizeItemInput(input: ItemInput): ItemInput {
     allowedMembers: input.visibility === 'custom' ? input.allowedMembers : [],
     completedOccurrences: input.completedOccurrences ?? [],
     recurringRule,
+    reminderOffset: normalizeReminderOffset(
+      Boolean(input.dateTime),
+      input.type,
+      input.reminderOffset
+    ),
   };
 }
 
@@ -89,6 +95,9 @@ export async function updateItem(
   }
   if (updates.type === 'document') {
     payload.recurringRule = DEFAULT_RECURRING_RULE;
+  }
+  if (updates.dateTime === null) {
+    payload.reminderOffset = 'none';
   }
   await setDoc(doc(db, 'items', itemId), payload, { merge: true });
 }

@@ -16,6 +16,7 @@ import { ItemFormOptions, ItemTypePicker } from '../../../src/components/ItemFor
 import { TagInput } from '../../../src/components/TagInput';
 import { ItemDateTimeField } from '../../../src/components/ItemDateTimeField';
 import { GroupPicker } from '../../../src/components/GroupPicker';
+import { ReminderPicker } from '../../../src/components/ReminderPicker';
 import { useGroupMembers } from '../../../src/hooks/useGroupMembers';
 import { createItem } from '../../../src/services/items';
 import { dismissItemFlow } from '../../../src/utils/navigation';
@@ -23,9 +24,12 @@ import { colors, spacing, itemTypeConfig, itemTypeSupportsRecurring } from '../.
 import {
   ItemType,
   ItemVisibility,
+  ItemReminderOffset,
   RecurringRule,
   DEFAULT_RECURRING_RULE,
+  defaultReminderForType,
 } from '../../../src/types';
+import { normalizeReminderOffset } from '../../../src/utils/reminders';
 import { getDefaultItemDateTime, toISODateTime } from '../../../src/utils/dates';
 
 export default function CreateItemScreen() {
@@ -62,6 +66,9 @@ export default function CreateItemScreen() {
     useState<RecurringRule>(DEFAULT_RECURRING_RULE);
   const [hasDate, setHasDate] = useState(true);
   const [dateTime, setDateTime] = useState(getDefaultItemDateTime);
+  const [reminderOffset, setReminderOffset] = useState<ItemReminderOffset>(
+    defaultReminderForType('task')
+  );
   const [loading, setLoading] = useState(false);
 
   const visibilityMembers = useMemo(
@@ -73,6 +80,9 @@ export default function CreateItemScreen() {
     setType(next);
     if (!itemTypeSupportsRecurring(next)) {
       setRecurringRule(DEFAULT_RECURRING_RULE);
+    }
+    if (hasDate) {
+      setReminderOffset(defaultReminderForType(next));
     }
   };
 
@@ -106,6 +116,7 @@ export default function CreateItemScreen() {
           assignedTo,
           notes: notes.trim(),
           tags,
+          reminderOffset: normalizeReminderOffset(hasDate, type, reminderOffset),
           completed: false,
           completedOccurrences: [],
         },
@@ -172,9 +183,11 @@ export default function CreateItemScreen() {
             onPress={() => {
               if (hasDate) {
                 setHasDate(false);
+                setReminderOffset('none');
               } else {
                 setDateTime(getDefaultItemDateTime());
                 setHasDate(true);
+                setReminderOffset(defaultReminderForType(type));
               }
             }}
           >
@@ -185,7 +198,15 @@ export default function CreateItemScreen() {
         </View>
 
         {hasDate && (
-          <ItemDateTimeField value={dateTime} onChange={setDateTime} />
+          <>
+            <ItemDateTimeField value={dateTime} onChange={setDateTime} />
+            <ReminderPicker
+              value={reminderOffset}
+              onChange={setReminderOffset}
+              assignedTo={assignedTo}
+              groupMembers={groupMembers}
+            />
+          </>
         )}
       </View>
 

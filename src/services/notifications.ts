@@ -2,19 +2,17 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-import { addDays, isBefore, parseISO, subHours } from 'date-fns';
-import { Item } from '../types';
+import { addDays, isBefore, parseISO } from 'date-fns';
+import { Item, ItemReminderOffset, getReminderOptionLabel } from '../types';
 import { expandItem } from '../utils/itemInstances';
 import { getItemsForNotification } from '../utils/notificationRules';
 import { formatRecurringLabel } from '../utils/recurrence';
+import {
+  getReminderOffsetsForItem,
+  reminderOffsetToMs,
+} from '../utils/reminders';
 
 export { formatRecurringLabel } from '../utils/recurrence';
-
-/** Default reminder offsets before each occurrence. */
-export const REMINDER_OFFSETS = [
-  { hours: 24, label: '24h' as const },
-  { hours: 1, label: '1h' as const },
-];
 
 /** iOS caps local notifications; schedule the nearest reminders first. */
 const MAX_SCHEDULED_NOTIFICATIONS = 58;
@@ -24,14 +22,14 @@ export interface ReminderPayload {
   itemId: string;
   groupId: string;
   occurrence: string;
-  reminder: '24h' | '1h';
+  reminder: ItemReminderOffset;
 }
 
 interface PendingReminder {
   item: Item;
   occurrenceDate: string;
   triggerDate: Date;
-  reminder: '24h' | '1h';
+  reminder: ItemReminderOffset;
 }
 
 Notifications.setNotificationHandler({
@@ -106,14 +104,20 @@ function getTypeLabel(item: Item): string {
   }
 }
 
-function getReminderTitle(item: Item, reminder: '24h' | '1h'): string {
+function getReminderTitle(item: Item, reminder: ItemReminderOffset): string {
   const label = getTypeLabel(item);
+  if (reminder === 'at_time') return `${label} due now: ${item.title}`;
+  if (reminder === '1h') return `${label} in 1 hour: ${item.title}`;
   if (reminder === '24h') return `${label} tomorrow: ${item.title}`;
-  return `${label} in 1 hour: ${item.title}`;
+  const timing = getReminderOptionLabel(reminder).toLowerCase();
+  return `${label} (${timing}): ${item.title}`;
 }
 
-function getReminderBody(item: Item, reminder: '24h' | '1h'): string {
-  const when = reminder === '24h' ? 'Due in 24 hours' : 'Due in 1 hour';
+function getReminderBody(item: Item, reminder: ItemReminderOffset): string {
+  const when =
+    reminder === 'at_time'
+      ? 'Due now'
+      : `Due ${getReminderOptionLabel(reminder).toLowerCase()}`;
   const recurring =
     item.recurringRule.frequency !== 'none'
       ? ` · ${formatRecurringLabel(item.recurringRule)}`
@@ -122,27 +126,37 @@ function getReminderBody(item: Item, reminder: '24h' | '1h'): string {
   return `${when}${recurring}${notes}`;
 }
 
+function triggerDateForOffset(
+  occurrence: Date,
+  offset: ItemReminderOffset
+): Date | null {
+  const ms = reminderOffsetToMs(offset);
+  if (ms === null) return null;
+  return new Date(occurrence.getTime() - ms);
+}
+
 function buildRemindersForItem(item: Item, now: Date): PendingReminder[] {
   if (!item.dateTime) return [];
 
   const rangeEnd = addDays(now, SCHEDULE_HORIZON_DAYS);
   const instances = expandItem(item, now, rangeEnd);
   const reminders: PendingReminder[] = [];
+  const offsets = getReminderOffsetsForItem(item);
 
   for (const instance of instances) {
     if (instance.completed) continue;
 
     const occurrence = parseISO(instance.occurrenceDate);
 
-    for (const offset of REMINDER_OFFSETS) {
-      const triggerDate = subHours(occurrence, offset.hours);
-      if (isBefore(triggerDate, now)) continue;
+    for (const offset of offsets) {
+      const triggerDate = triggerDateForOffset(occurrence, offset);
+      if (!triggerDate || isBefore(triggerDate, now)) continue;
 
       reminders.push({
         item,
         occurrenceDate: instance.occurrenceDate,
         triggerDate,
-        reminder: offset.label,
+        reminder: offset,
       });
     }
   }
@@ -175,7 +189,7 @@ async function scheduleReminder(pending: PendingReminder): Promise<void> {
 
 /**
  * Schedules local reminders for upcoming item occurrences visible/assigned to the user.
- * Defaults: 24 hours before and 1 hour before each occurrence.
+ * Uses each item's reminder setting (legacy items without one keep 24h + 1h).
  */
 export async function syncItemNotifications(
   items: Item[],
