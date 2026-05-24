@@ -17,6 +17,7 @@ import {
   countExpiredItems,
   formatGroupItemCounts,
 } from '../utils/itemInstances';
+import { getNameInitials } from '../utils/names';
 import {
   subscribeToGroup,
   buildInviteMessage,
@@ -226,7 +227,7 @@ export function GroupDetailContent({
               <View key={member.id} style={styles.memberRow}>
                 <View style={styles.memberAvatar}>
                   <Text style={styles.memberAvatarText}>
-                    {member.name.charAt(0).toUpperCase()}
+                    {getNameInitials(member.name)}
                   </Text>
                 </View>
                 <View style={styles.memberInfo}>
@@ -370,7 +371,8 @@ const styles = StyleSheet.create({
   memberAvatarText: {
     color: '#fff',
     fontWeight: '700',
-    fontSize: 16,
+    fontSize: 14,
+    letterSpacing: -0.5,
   },
   memberInfo: {
     flex: 1,

@@ -5,6 +5,11 @@
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#EDE8F5"
+    },
     "userInterfaceStyle": "light",
     "scheme": "lyvee",
     "newArchEnabled": true,
@@ -27,6 +32,14 @@
       "bundler": "metro"
     },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "cover",
+          "backgroundColor": "#EDE8F5"
+        }
+      ],
       "expo-router",
       "expo-secure-store",
       [

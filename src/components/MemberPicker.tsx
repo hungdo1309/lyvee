@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { User } from '../types';
 import { colors, radius, spacing } from '../constants/theme';
+import { getFirstName, getNameInitials } from '../utils/names';
 
 interface MemberPickerProps {
   members: User[];
@@ -55,11 +56,11 @@ export function MemberPicker({
             >
               <View style={[styles.avatar, selected && styles.avatarSelected]}>
                 <Text style={[styles.avatarText, selected && styles.avatarTextSelected]}>
-                  {member.name.charAt(0).toUpperCase()}
+                  {getNameInitials(member.name)}
                 </Text>
               </View>
               <Text style={[styles.name, selected && styles.nameSelected]}>
-                {member.name.split(' ')[0]}
+                {getFirstName(member.name)}
               </Text>
             </TouchableOpacity>
           );
@@ -112,9 +113,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   avatarText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.textSecondary,
+    letterSpacing: -0.5,
   },
   avatarTextSelected: {
     color: '#fff',

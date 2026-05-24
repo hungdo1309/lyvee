@@ -7,6 +7,7 @@ import { Button } from '../../../src/components/Button';
 import { Card } from '../../../src/components/Card';
 import { InfoRow, SectionCard } from '../../../src/components/SectionCard';
 import { colors, layout, radius, spacing, typography } from '../../../src/constants/theme';
+import { getNameInitials } from '../../../src/utils/names';
 
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
@@ -31,7 +32,7 @@ export default function SettingsScreen() {
         <View style={styles.profileRow}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
-              {user?.name?.charAt(0).toUpperCase() ?? '?'}
+              {getNameInitials(user?.name ?? '', '?')}
             </Text>
           </View>
           <View>
@@ -83,9 +84,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: '#fff',
+    letterSpacing: -0.5,
   },
   name: {
     fontSize: 18,
