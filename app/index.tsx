@@ -1,0 +1,18 @@
+import { useEffect } from 'react';
+import { Redirect } from 'expo-router';
+import { useAuth } from '../src/context/AuthContext';
+import { LoadingScreen } from '../src/components/LoadingScreen';
+
+export default function Index() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  if (user) {
+    return <Redirect href="/(app)" />;
+  }
+
+  return <Redirect href="/(auth)/login" />;
+}
