@@ -5,12 +5,10 @@ import {
   StyleSheet,
   Share,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../../src/context/AuthContext';
-import { useApp } from '../../../src/context/AppContext';
 import { Button } from '../../../src/components/Button';
 import { Card } from '../../../src/components/Card';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
@@ -22,15 +20,14 @@ import {
   isGroupOwner,
 } from '../../../src/services/groups';
 import { colors, layout, spacing, typography } from '../../../src/constants/theme';
+import { onboardingStepLabel } from '../../../src/constants/onboarding';
 import { Group } from '../../../src/types';
 
 export default function OnboardingInviteScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const { user } = useAuth();
-  const { selectGroup, completeOnboarding } = useApp();
   const [group, setGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);
-  const [finishing, setFinishing] = useState(false);
 
   useEffect(() => {
     if (!groupId) return;
@@ -44,20 +41,8 @@ export default function OnboardingInviteScreen() {
     return unsubscribe;
   }, [groupId, user]);
 
-  const finish = async () => {
-    if (!groupId || finishing) return;
-    setFinishing(true);
-    try {
-      await selectGroup(groupId);
-      await completeOnboarding();
-      router.replace('/(app)/(tabs)' as Href);
-    } catch (error: unknown) {
-      Alert.alert(
-        'Error',
-        error instanceof Error ? error.message : 'Could not continue'
-      );
-      setFinishing(false);
-    }
+  const goNext = () => {
+    router.push(`/(app)/onboarding/item-types?groupId=${groupId}` as Href);
   };
 
   const handleShare = async () => {
@@ -90,7 +75,7 @@ export default function OnboardingInviteScreen() {
         <ScreenBackButton />
       </View>
       <View style={styles.header}>
-        <Text style={styles.step}>Step 2 of 2</Text>
+        <Text style={styles.step}>{onboardingStepLabel(2)}</Text>
         <Text style={styles.title}>Invite members</Text>
         <Text style={styles.subtitle}>
           Optional — share your invite code so others can join "{group.name}".
@@ -124,17 +109,11 @@ export default function OnboardingInviteScreen() {
             style={styles.footerButton}
           />
         )}
-        <Button
-          title="Continue"
-          size="lg"
-          onPress={finish}
-          loading={finishing}
-        />
+        <Button title="Continue" size="lg" onPress={goNext} />
         <Button
           title="Skip for now"
           variant="ghost"
-          onPress={finish}
-          disabled={finishing}
+          onPress={goNext}
           style={styles.skip}
         />
       </View>

@@ -6,6 +6,10 @@ export default function OnboardingLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="group" />
       <Stack.Screen name="invite" />
+      <Stack.Screen name="item-types" />
+      <Stack.Screen name="calendar" />
+      <Stack.Screen name="sharing" />
+      <Stack.Screen name="reminders" />
     </Stack>
   );
 }

@@ -19,6 +19,7 @@ import { KeyboardAvoidingScreen } from '../../../src/components/KeyboardAvoiding
 import { ScreenBackButton } from '../../../src/components/ScreenBackButton';
 import { createGroup, joinGroupByInviteCode } from '../../../src/services/groups';
 import { colors, layout, spacing, typography } from '../../../src/constants/theme';
+import { onboardingStepLabel } from '../../../src/constants/onboarding';
 
 export default function OnboardingGroupScreen() {
   const { user } = useAuth();
@@ -67,7 +68,7 @@ export default function OnboardingGroupScreen() {
         <ScreenBackButton />
       </View>
       <View style={styles.header}>
-        <Text style={styles.step}>Step 1 of 2</Text>
+        <Text style={styles.step}>{onboardingStepLabel(1)}</Text>
         <Text style={styles.title}>Set up your group</Text>
         <Text style={styles.subtitle}>
           Create a group for your household or join one with an invite code.

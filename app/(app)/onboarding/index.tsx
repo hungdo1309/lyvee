@@ -4,6 +4,7 @@ import { router, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../../../src/components/Button';
 import { colors, layout, spacing, typography } from '../../../src/constants/theme';
+import { ONBOARDING_WELCOME_STEPS } from '../../../src/constants/onboarding';
 
 export default function OnboardingWelcomeScreen() {
   return (
@@ -16,9 +17,9 @@ export default function OnboardingWelcomeScreen() {
         </Text>
 
         <View style={styles.steps}>
-          <Step number="1" label="Create or join a group" />
-          <Step number="2" label="Invite household members" />
-          <Step number="3" label="Start using Lyvee" />
+          {ONBOARDING_WELCOME_STEPS.map((label, index) => (
+            <Step key={label} number={String(index + 1)} label={label} />
+          ))}
         </View>
       </View>
 

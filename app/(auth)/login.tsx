@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/context/AuthContext';
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
+import { AppLogoHeader } from '../../src/components/AppLogoHeader';
 import { colors, spacing, typography } from '../../src/constants/theme';
 import { isFirebaseConfigured } from '../../src/config/firebase';
 
@@ -74,8 +75,7 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <Text style={styles.logo}>Lyvee</Text>
-            <Text style={styles.tagline}>Shared life, simplified</Text>
+            <AppLogoHeader tagline="Shared life, simplified" />
           </View>
 
           <View style={styles.form}>
@@ -136,16 +136,6 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: spacing.xxl,
-  },
-  logo: {
-    ...typography.title,
-    fontSize: 40,
-    color: colors.primary,
-    letterSpacing: -1,
-  },
-  tagline: {
-    ...typography.caption,
-    marginTop: spacing.sm,
   },
   form: {
     marginBottom: spacing.lg,

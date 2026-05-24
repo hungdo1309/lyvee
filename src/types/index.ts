@@ -122,6 +122,7 @@ export const FEEDBACK_SCREENS = [
   'Items',
   'Groups',
   'Settings',
+  'Onboarding',
   'Create Item',
   'Edit Item',
   'Group Detail',
