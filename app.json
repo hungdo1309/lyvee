@@ -15,10 +15,15 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.lyvee.app"
+      "bundleIdentifier": "com.lyvee.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#7A6FD8",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -53,6 +58,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9712e8dd-3967-4bb4-9600-fafa123cd6ad"
+      }
+    },
+    "owner": "justhung"
   }
 }

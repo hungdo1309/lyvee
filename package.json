@@ -31,13 +31,22 @@
   "devDependencies": {
     "@expo/ngrok": "^4.1.3",
     "@types/react": "~19.1.10",
+    "eas-cli": "16.32.0",
     "typescript": "~5.9.2"
   },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "eas": "eas",
+    "build:dev": "eas build --profile development --platform all",
+    "build:preview": "eas build --profile preview --platform all",
+    "build:android": "eas build --profile production --platform android",
+    "build:ios": "eas build --profile production --platform ios",
+    "build:all": "eas build --profile production --platform all",
+    "submit:android": "eas submit --platform android --latest --profile production",
+    "submit:ios": "eas submit --platform ios --latest --profile production"
   },
   "private": true
 }
