@@ -15,9 +15,8 @@
     "android": {
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "backgroundColor": "#2563EB",
+        "backgroundColor": "#7A6FD8",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "package": "com.lyvee.app",
@@ -34,7 +33,7 @@
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
-          "color": "#2563EB"
+          "color": "#7A6FD8"
         }
       ],
       "@react-native-community/datetimepicker"
