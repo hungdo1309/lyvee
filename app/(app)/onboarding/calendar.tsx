@@ -1,27 +1,37 @@
 import React from 'react';
-import { router, useLocalSearchParams, type Href } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import {
   OnboardingFeatureRow,
   OnboardingStepLayout,
 } from '../../../src/components/onboarding/OnboardingStepLayout';
-import { ONBOARDING_CALENDAR_FEATURES } from '../../../src/constants/onboarding';
+import {
+  ONBOARDING_NAV_FEATURES,
+  ONBOARDING_NAV_SUBTITLE,
+  ONBOARDING_NAV_TITLE,
+  buildOnboardingHref,
+  getOnboardingTourStepProps,
+  normalizeOnboardingGroupId,
+} from '../../../src/constants/onboarding';
 
 export default function OnboardingCalendarScreen() {
-  const { groupId } = useLocalSearchParams<{ groupId: string }>();
+  const params = useLocalSearchParams<{ groupId?: string | string[] }>();
+  const groupId = normalizeOnboardingGroupId(params.groupId);
+  const stepProps = getOnboardingTourStepProps(2, groupId);
 
   const goNext = () => {
-    router.push(`/(app)/onboarding/sharing?groupId=${groupId}` as Href);
+    router.push(buildOnboardingHref('/(app)/onboarding/sharing', groupId));
   };
 
   return (
     <OnboardingStepLayout
-      step={4}
-      title="Calendar & Items"
-      subtitle="Switch views depending on how you like to browse your household plan."
+      {...stepProps}
+      title={ONBOARDING_NAV_TITLE}
+      subtitle={ONBOARDING_NAV_SUBTITLE}
       onContinue={goNext}
-      onSkip={goNext}
+      tourSkip
+      groupId={groupId}
     >
-      {ONBOARDING_CALENDAR_FEATURES.map((feature) => (
+      {ONBOARDING_NAV_FEATURES.map((feature) => (
         <OnboardingFeatureRow
           key={feature.title}
           icon={feature.icon}

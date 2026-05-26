@@ -13,6 +13,7 @@ import { useAuth } from '../../../src/context/AuthContext';
 import { useApp } from '../../../src/context/AppContext';
 import { GroupSelector } from '../../../src/components/GroupSelector';
 import { EmptyState } from '../../../src/components/EmptyState';
+import { NoGroupsPrompt } from '../../../src/components/NoGroupsPrompt';
 import { Fab } from '../../../src/components/Fab';
 import { ItemCard } from '../../../src/components/ItemCard';
 import { ItemTypeFiltersBar } from '../../../src/components/ItemTypeFiltersBar';
@@ -141,15 +142,7 @@ export default function HomeScreen() {
   if (groups.length === 0) {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        <EmptyState
-          icon="👥"
-          title="Create a group first"
-          subtitle="Groups let you share items with household members and friends."
-          action={{
-            label: 'Go to Groups',
-            onPress: () => router.push('/(app)/(tabs)/groups' as Href),
-          }}
-        />
+        <NoGroupsPrompt />
       </SafeAreaView>
     );
   }
@@ -170,7 +163,8 @@ export default function HomeScreen() {
 
         {activeGroup && (
           <>
-            <View style={styles.toolbar}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionHeading}>Upcoming in the next two weeks</Text>
               <TouchableOpacity
                 style={[
                   styles.filterButton,
@@ -198,8 +192,6 @@ export default function HomeScreen() {
                 onTagsChange={setSelectedTags}
               />
             )}
-
-            <Text style={styles.sectionHeading}>Upcoming in the next two weeks</Text>
 
             <View style={styles.dayList}>
               {daySections.map((section) => {
@@ -317,9 +309,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: spacing.xxl + 56,
   },
-  toolbar: {
+  sectionHeader: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
     paddingHorizontal: layout.screenPadding,
     marginBottom: spacing.sm,
   },
@@ -347,14 +341,14 @@ const styles = StyleSheet.create({
   },
   sectionHeading: {
     ...typography.caption,
-    paddingHorizontal: layout.screenPadding,
-    marginBottom: spacing.sm,
+    flex: 1,
+    marginBottom: 0,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   dayList: {
     paddingHorizontal: layout.screenPadding,
-    gap: spacing.xs,
+    gap: 4,
   },
   daySection: {
     borderRadius: radius.md,
@@ -381,7 +375,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
   },
   dayHeaderText: {
     flex: 1,

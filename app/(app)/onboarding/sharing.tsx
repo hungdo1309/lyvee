@@ -1,25 +1,34 @@
 import React from 'react';
-import { router, useLocalSearchParams, type Href } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import {
   OnboardingFeatureRow,
   OnboardingStepLayout,
 } from '../../../src/components/onboarding/OnboardingStepLayout';
-import { ONBOARDING_SHARING_FEATURES } from '../../../src/constants/onboarding';
+import {
+  ONBOARDING_SHARING_FEATURES,
+  ONBOARDING_SHARING_SUBTITLE,
+  buildOnboardingHref,
+  getOnboardingTourStepProps,
+  normalizeOnboardingGroupId,
+} from '../../../src/constants/onboarding';
 
 export default function OnboardingSharingScreen() {
-  const { groupId } = useLocalSearchParams<{ groupId: string }>();
+  const params = useLocalSearchParams<{ groupId?: string | string[] }>();
+  const groupId = normalizeOnboardingGroupId(params.groupId);
+  const stepProps = getOnboardingTourStepProps(3, groupId);
 
   const goNext = () => {
-    router.push(`/(app)/onboarding/reminders?groupId=${groupId}` as Href);
+    router.push(buildOnboardingHref('/(app)/onboarding/reminders', groupId));
   };
 
   return (
     <OnboardingStepLayout
-      step={5}
+      {...stepProps}
       title="Share & collaborate"
-      subtitle="Keep the right people in the loop without oversharing."
+      subtitle={ONBOARDING_SHARING_SUBTITLE}
       onContinue={goNext}
-      onSkip={goNext}
+      tourSkip
+      groupId={groupId}
     >
       {ONBOARDING_SHARING_FEATURES.map((feature) => (
         <OnboardingFeatureRow

@@ -1,30 +1,35 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { router, useLocalSearchParams, type Href } from 'expo-router';
-import {
-  OnboardingStepLayout,
-} from '../../../src/components/onboarding/OnboardingStepLayout';
+import { router, useLocalSearchParams } from 'expo-router';
+import { OnboardingStepLayout } from '../../../src/components/onboarding/OnboardingStepLayout';
 import {
   ONBOARDING_ITEM_TYPES,
+  ONBOARDING_ITEM_TYPES_SUBTITLE,
+  buildOnboardingHref,
   getOnboardingItemTypeColor,
   getOnboardingItemTypeLabel,
+  getOnboardingTourStepProps,
+  normalizeOnboardingGroupId,
 } from '../../../src/constants/onboarding';
 import { colors, spacing, itemTypeConfig } from '../../../src/constants/theme';
 
 export default function OnboardingItemTypesScreen() {
-  const { groupId } = useLocalSearchParams<{ groupId: string }>();
+  const params = useLocalSearchParams<{ groupId?: string | string[] }>();
+  const groupId = normalizeOnboardingGroupId(params.groupId);
+  const stepProps = getOnboardingTourStepProps(1, groupId);
 
   const goNext = () => {
-    router.push(`/(app)/onboarding/calendar?groupId=${groupId}` as Href);
+    router.push(buildOnboardingHref('/(app)/onboarding/calendar', groupId));
   };
 
   return (
     <OnboardingStepLayout
-      step={3}
+      {...stepProps}
       title="Three ways to plan"
-      subtitle="Lyvee organizes your household into tasks, events, and documents."
+      subtitle={ONBOARDING_ITEM_TYPES_SUBTITLE}
       onContinue={goNext}
-      onSkip={goNext}
+      tourSkip
+      groupId={groupId}
     >
       {ONBOARDING_ITEM_TYPES.map((item) => (
         <View key={item.type} style={styles.typeCard}>

@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import * as Linking from 'expo-linking';
 import { db } from '../config/firebase';
+import { APP_NAME } from '../constants/app';
 import { Group, GroupInvite } from '../types';
 import {
   canManageGroup,
@@ -68,7 +69,7 @@ export function buildInviteLink(inviteCode: string): string {
 
 export function buildInviteMessage(group: Group): string {
   const link = buildInviteLink(group.inviteCode);
-  return `Join "${group.name}" on Lyvee!\n\nInvite code: ${group.inviteCode}\n\nOr open: ${link}`;
+  return `Join "${group.name}" on ${APP_NAME}!\n\nInvite code: ${group.inviteCode}\n\nOr open: ${link}`;
 }
 
 export async function createGroup(
@@ -88,6 +89,12 @@ export async function createGroup(
   await setDoc(doc(db, 'groups', id), group);
   await saveInviteMapping(group);
   return group;
+}
+
+export async function getGroupById(groupId: string): Promise<Group | null> {
+  const snapshot = await getDoc(doc(db, 'groups', groupId));
+  if (!snapshot.exists()) return null;
+  return normalizeGroup(snapshot.data() as Group);
 }
 
 export async function joinGroupByInviteCode(

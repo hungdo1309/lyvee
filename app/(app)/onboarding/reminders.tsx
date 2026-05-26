@@ -1,52 +1,35 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import {
   OnboardingFeatureRow,
   OnboardingStepLayout,
 } from '../../../src/components/onboarding/OnboardingStepLayout';
-import { Button } from '../../../src/components/Button';
-import { ONBOARDING_REMINDER_FEATURES } from '../../../src/constants/onboarding';
-import { ensureNotificationPermissions } from '../../../src/services/notifications';
+import {
+  ONBOARDING_FINISH_LABEL,
+  ONBOARDING_REMINDER_FEATURES,
+  ONBOARDING_REMINDERS_SUBTITLE,
+  getOnboardingTourStepProps,
+  normalizeOnboardingGroupId,
+} from '../../../src/constants/onboarding';
 import { useFinishOnboarding } from '../../../src/hooks/useFinishOnboarding';
-import { colors, spacing } from '../../../src/constants/theme';
 
 export default function OnboardingRemindersScreen() {
-  const { groupId } = useLocalSearchParams<{ groupId: string }>();
+  const params = useLocalSearchParams<{ groupId?: string | string[] }>();
+  const groupId = normalizeOnboardingGroupId(params.groupId);
+  const stepProps = getOnboardingTourStepProps(4, groupId);
   const { finish, finishing } = useFinishOnboarding();
-  const [notificationsEnabled, setNotificationsEnabled] = useState<boolean | null>(null);
-
-  const handleEnableNotifications = async () => {
-    const granted = await ensureNotificationPermissions();
-    setNotificationsEnabled(granted);
-  };
-
-  const handleFinish = () => {
-    if (groupId) finish(groupId);
-  };
 
   return (
     <OnboardingStepLayout
-      step={6}
+      {...stepProps}
       title="Reminders"
-      subtitle="Never miss a due date or document expiration."
-      onContinue={handleFinish}
-      continueLabel="Start using Lyvee"
+      subtitle={ONBOARDING_REMINDERS_SUBTITLE}
+      onContinue={() => finish(groupId)}
+      continueLabel={ONBOARDING_FINISH_LABEL}
+      preserveContinueTitle
       loading={finishing}
-      footerExtra={
-        notificationsEnabled === true ? (
-          <View style={styles.statusBanner}>
-            <Text style={styles.statusText}>Notifications enabled</Text>
-          </View>
-        ) : (
-          <Button
-            title="Enable notifications"
-            variant="secondary"
-            onPress={handleEnableNotifications}
-            style={styles.enableButton}
-          />
-        )
-      }
+      tourSkip
+      groupId={groupId}
     >
       {ONBOARDING_REMINDER_FEATURES.map((feature) => (
         <OnboardingFeatureRow
@@ -56,36 +39,6 @@ export default function OnboardingRemindersScreen() {
           description={feature.description}
         />
       ))}
-      {notificationsEnabled === false ? (
-        <Text style={styles.permissionHint}>
-          You can turn on notifications later in your phone settings.
-        </Text>
-      ) : null}
     </OnboardingStepLayout>
   );
 }
-
-const styles = StyleSheet.create({
-  enableButton: {
-    marginBottom: spacing.sm,
-  },
-  statusBanner: {
-    backgroundColor: colors.primaryLight,
-    borderRadius: 8,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  statusText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.primary,
-    textAlign: 'center',
-  },
-  permissionHint: {
-    fontSize: 13,
-    color: colors.textMuted,
-    lineHeight: 18,
-    textAlign: 'center',
-  },
-});

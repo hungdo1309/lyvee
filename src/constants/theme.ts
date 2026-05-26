@@ -1,4 +1,4 @@
-/** Lyvee brand palette — aligned with app icon and splash screen. */
+/** LyVee brand palette — aligned with app icon and splash screen. */
 export const brand = {
   purple: '#7A6FD8',
   purpleDark: '#5C51B8',
@@ -135,7 +135,7 @@ export const itemTypeConfig = {
     color: colors.document,
     icon: '▤',
     titlePlaceholder: 'What is this document?',
-    dateTimeLabel: 'Expired Date & Time',
+    dateTimeLabel: 'Expiration Date',
     supportsRecurring: false,
   },
 };

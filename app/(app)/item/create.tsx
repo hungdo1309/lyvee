@@ -205,7 +205,12 @@ export default function CreateItemScreen() {
 
         {hasDate && (
           <>
-            <ItemDateTimeField value={dateTime} onChange={setDateTime} />
+            <ItemDateTimeField
+              value={dateTime}
+              onChange={setDateTime}
+              dateOnly={type === 'document'}
+              sheetTitle={itemTypeConfig[type].dateTimeLabel}
+            />
             <ReminderPicker
               value={reminderOffset}
               onChange={setReminderOffset}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { type ReactNode } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Card } from './Card';
 import { colors, radius, spacing, typography } from '../constants/theme';
@@ -6,6 +6,7 @@ import { formatButtonLabel } from '../utils/strings';
 
 interface EmptyStateProps {
   icon?: string;
+  iconNode?: ReactNode;
   title: string;
   subtitle?: string;
   action?: {
@@ -13,19 +14,44 @@ interface EmptyStateProps {
     onPress: () => void;
   };
   compact?: boolean;
+  compactTight?: boolean;
+  iconWrapSize?: number;
+  iconSize?: number;
 }
 
 export function EmptyState({
   icon = '📋',
+  iconNode,
   title,
   subtitle,
   action,
   compact = false,
+  compactTight = false,
+  iconWrapSize = 64,
+  iconSize = 28,
 }: EmptyStateProps) {
   return (
-    <View style={[styles.container, compact && styles.compact]}>
-      <View style={styles.iconWrap}>
-        <Text style={styles.icon}>{icon}</Text>
+    <View
+      style={[
+        styles.container,
+        compact && !compactTight && styles.compact,
+        compactTight && styles.compactTight,
+      ]}
+    >
+      <View
+        style={[
+          styles.iconWrap,
+          { width: iconWrapSize, height: iconWrapSize },
+        ]}
+      >
+        {iconNode ?? (
+          <Text
+            style={[styles.icon, { fontSize: iconSize, lineHeight: iconSize }]}
+            allowFontScaling={false}
+          >
+            {icon}
+          </Text>
+        )}
       </View>
       <Text style={styles.title}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
@@ -59,9 +85,13 @@ const styles = StyleSheet.create({
     flex: 0,
     paddingVertical: spacing.lg,
   },
+  compactTight: {
+    flex: 0,
+    paddingTop: spacing.lg,
+    paddingBottom: 0,
+    paddingHorizontal: 0,
+  },
   iconWrap: {
-    width: 64,
-    height: 64,
     borderRadius: radius.full,
     backgroundColor: colors.iconBg,
     alignItems: 'center',
@@ -69,7 +99,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   icon: {
-    fontSize: 28,
+    textAlign: 'center',
+    includeFontPadding: false,
   },
   title: {
     ...typography.heading,

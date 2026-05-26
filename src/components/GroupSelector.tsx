@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { router, type Href } from 'expo-router';
 import { Group } from '../types';
 import { GroupPicker } from './GroupPicker';
+import { navigateToCreateGroup } from '../utils/groupSetupNavigation';
 import { colors, spacing } from '../constants/theme';
 
 interface GroupSelectorProps {
@@ -27,7 +27,7 @@ export function GroupSelector({
         headerAction={
           <TouchableOpacity
             style={styles.manageLink}
-            onPress={() => router.push('/(app)/(tabs)/groups?create=1' as Href)}
+            onPress={navigateToCreateGroup}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Text style={styles.manageText}>+ Groups</Text>

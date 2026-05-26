@@ -14,11 +14,13 @@ import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { EmptyState } from '../../src/components/EmptyState';
+import { GroupsIcon } from '../../src/components/GroupsIcon';
 import { GroupCard } from '../../src/components/GroupCard';
 import { LoadingScreen } from '../../src/components/LoadingScreen';
 import { CancelButton } from '../../src/components/CancelButton';
 import { createGroup, joinGroupByInviteCode } from '../../src/services/groups';
 import { countActiveItems, formatActiveItemCount } from '../../src/utils/itemInstances';
+import { APP_NAME } from '../../src/constants/app';
 import { colors, layout, spacing, typography } from '../../src/constants/theme';
 
 export default function SelectGroupScreen() {
@@ -82,7 +84,7 @@ export default function SelectGroupScreen() {
         </View>
       )}
       <View style={styles.header}>
-        <Text style={styles.logo}>Lyvee</Text>
+        <Text style={styles.logo}>{APP_NAME}</Text>
         <Text style={styles.title}>Choose a group</Text>
         <Text style={styles.subtitle}>
           Hi {user?.name?.split(' ')[0]}, pick a group to continue.
@@ -155,7 +157,7 @@ export default function SelectGroupScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <EmptyState
-            icon="👥"
+            iconNode={<GroupsIcon />}
             title="No groups yet"
             subtitle="Create a group or join one with an invite code to get started."
             compact

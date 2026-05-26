@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import { router, type Href } from 'expo-router';
+import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../../src/context/AuthContext';
 import { useApp } from '../../../src/context/AppContext';
@@ -14,6 +14,7 @@ import { CalendarView } from '../../../src/components/CalendarView';
 import { CalendarFiltersBar } from '../../../src/components/CalendarFilters';
 import { GroupSelector } from '../../../src/components/GroupSelector';
 import { EmptyState } from '../../../src/components/EmptyState';
+import { NoGroupsPrompt } from '../../../src/components/NoGroupsPrompt';
 import { Fab } from '../../../src/components/Fab';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
 import { useGroupMembers } from '../../../src/hooks/useGroupMembers';
@@ -110,15 +111,7 @@ export default function CalendarScreen() {
   if (groups.length === 0) {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        <EmptyState
-          icon="👥"
-          title="Create a group first"
-          subtitle="Groups let you share items with household members and friends."
-          action={{
-            label: 'Go to Groups',
-            onPress: () => router.push('/(app)/(tabs)/groups' as Href),
-          }}
-        />
+        <NoGroupsPrompt />
       </SafeAreaView>
     );
   }

@@ -11,7 +11,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Calendar, DateData } from 'react-native-calendars';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { addMonths, format, parseISO, startOfMonth } from 'date-fns';
+import { addMonths, format, parseISO, startOfDay, startOfMonth } from 'date-fns';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CancelButton } from './CancelButton';
 import { Button } from './Button';
@@ -20,16 +20,23 @@ import { colors, radius, spacing } from '../constants/theme';
 interface ItemDateTimeFieldProps {
   value: Date;
   onChange: (date: Date) => void;
+  dateOnly?: boolean;
+  sheetTitle?: string;
 }
 
 type PickerMode = 'date' | 'time';
 
+function dateFromDateString(dateString: string): Date {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
 function mergeDateWithTime(dateString: string, timeSource: Date): Date {
-  const selected = parseISO(dateString);
+  const base = dateFromDateString(dateString);
   return new Date(
-    selected.getFullYear(),
-    selected.getMonth(),
-    selected.getDate(),
+    base.getFullYear(),
+    base.getMonth(),
+    base.getDate(),
     timeSource.getHours(),
     timeSource.getMinutes(),
     0,
@@ -37,7 +44,12 @@ function mergeDateWithTime(dateString: string, timeSource: Date): Date {
   );
 }
 
-export function ItemDateTimeField({ value, onChange }: ItemDateTimeFieldProps) {
+export function ItemDateTimeField({
+  value,
+  onChange,
+  dateOnly = false,
+  sheetTitle = 'Date & Time',
+}: ItemDateTimeFieldProps) {
   const insets = useSafeAreaInsets();
   const [visible, setVisible] = useState(false);
   const [mode, setMode] = useState<PickerMode>('date');
@@ -59,7 +71,7 @@ export function ItemDateTimeField({ value, onChange }: ItemDateTimeFieldProps) {
   const monthLabel = format(monthDate, 'MMMM yyyy');
 
   const handleConfirm = () => {
-    onChange(draft);
+    onChange(dateOnly ? startOfDay(draft) : draft);
     setVisible(false);
   };
 
@@ -70,8 +82,14 @@ export function ItemDateTimeField({ value, onChange }: ItemDateTimeFieldProps) {
   };
 
   const handleDayPress = (day: DateData) => {
-    setDraft((current) => mergeDateWithTime(day.dateString, current));
+    setDraft((current) =>
+      dateOnly ? dateFromDateString(day.dateString) : mergeDateWithTime(day.dateString, current)
+    );
   };
+
+  const fieldAccessibilityLabel = dateOnly
+    ? `Change expiration date, ${format(value, 'EEEE, MMMM d, yyyy')}`
+    : `Change date and time, ${format(value, 'EEEE, MMMM d, yyyy h:mm a')}`;
 
   const shiftMonth = (delta: number) => {
     setCalendarMonth(format(startOfMonth(addMonths(monthDate, delta)), 'yyyy-MM-dd'));
@@ -83,7 +101,7 @@ export function ItemDateTimeField({ value, onChange }: ItemDateTimeFieldProps) {
         style={styles.field}
         onPress={() => setVisible(true)}
         accessibilityRole="button"
-        accessibilityLabel={`Change date and time, ${format(value, 'EEEE, MMMM d, yyyy h:mm a')}`}
+        accessibilityLabel={fieldAccessibilityLabel}
       >
         <View style={styles.iconWrap}>
           <Ionicons name="calendar-outline" size={20} color={colors.primary} />
@@ -91,7 +109,9 @@ export function ItemDateTimeField({ value, onChange }: ItemDateTimeFieldProps) {
         <View style={styles.copy}>
           <Text style={styles.weekdayLine}>{format(value, 'EEEE')}</Text>
           <Text style={styles.dateLine}>{format(value, 'MMMM d, yyyy')}</Text>
-          <Text style={styles.timeLine}>{format(value, 'h:mm a')}</Text>
+          {!dateOnly ? (
+            <Text style={styles.timeLine}>{format(value, 'h:mm a')}</Text>
+          ) : null}
         </View>
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </TouchableOpacity>
@@ -101,6 +121,7 @@ export function ItemDateTimeField({ value, onChange }: ItemDateTimeFieldProps) {
         transparent
         animationType="slide"
         onRequestClose={() => setVisible(false)}
+        statusBarTranslucent={Platform.OS === 'android'}
       >
         <Pressable style={styles.overlay} onPress={() => setVisible(false)}>
           <Pressable
@@ -108,34 +129,49 @@ export function ItemDateTimeField({ value, onChange }: ItemDateTimeFieldProps) {
             onPress={() => undefined}
           >
             <View style={styles.handle} />
-            <Text style={styles.sheetTitle}>Date & Time</Text>
+            <Text style={styles.sheetTitle}>{sheetTitle}</Text>
 
             <View style={styles.summaryCard}>
               <Text style={styles.summaryWeekday}>{format(draft, 'EEEE')}</Text>
               <Text style={styles.summaryDate}>{format(draft, 'MMMM d, yyyy')}</Text>
-              <Text style={styles.summaryTime}>{format(draft, 'h:mm a')}</Text>
+              {!dateOnly ? (
+                <Text style={styles.summaryTime}>{format(draft, 'h:mm a')}</Text>
+              ) : null}
             </View>
 
-            <View style={styles.segmentRow}>
-              <TouchableOpacity
-                style={[styles.segment, mode === 'date' && styles.segmentActive]}
-                onPress={() => setMode('date')}
-              >
-                <Text style={[styles.segmentText, mode === 'date' && styles.segmentTextActive]}>
-                  Date
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.segment, mode === 'time' && styles.segmentActive]}
-                onPress={() => setMode('time')}
-              >
-                <Text style={[styles.segmentText, mode === 'time' && styles.segmentTextActive]}>
-                  Time
-                </Text>
-              </TouchableOpacity>
-            </View>
+            {!dateOnly ? (
+              <View style={styles.segmentRow}>
+                <TouchableOpacity
+                  style={[styles.segment, mode === 'date' && styles.segmentActive]}
+                  onPress={() => setMode('date')}
+                >
+                  <Text style={[styles.segmentText, mode === 'date' && styles.segmentTextActive]}>
+                    Date
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.segment, mode === 'time' && styles.segmentActive]}
+                  onPress={() => setMode('time')}
+                >
+                  <Text style={[styles.segmentText, mode === 'time' && styles.segmentTextActive]}>
+                    Time
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
 
-            {mode === 'date' ? (
+            {!dateOnly && mode === 'time' ? (
+              <View style={styles.pickerWrap}>
+                <DateTimePicker
+                  value={draft}
+                  mode="time"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'spinner'}
+                  onChange={handlePickerChange}
+                  themeVariant="light"
+                  style={styles.picker}
+                />
+              </View>
+            ) : (
               <View style={styles.calendarCard}>
                 <View style={styles.monthNav}>
                   <TouchableOpacity
@@ -190,17 +226,6 @@ export function ItemDateTimeField({ value, onChange }: ItemDateTimeFieldProps) {
                     textDayHeaderFontSize: 12,
                   }}
                   style={styles.calendar}
-                />
-              </View>
-            ) : (
-              <View style={styles.pickerWrap}>
-                <DateTimePicker
-                  value={draft}
-                  mode="time"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'spinner'}
-                  onChange={handlePickerChange}
-                  themeVariant="light"
-                  style={styles.picker}
                 />
               </View>
             )}

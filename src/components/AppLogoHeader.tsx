@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { colors, spacing, typography } from '../constants/theme';
+import { APP_NAME } from '../constants/app';
 
 interface AppLogoHeaderProps {
   tagline?: string;
@@ -19,9 +20,9 @@ export function AppLogoHeader({ tagline, iconSize = 96 }: AppLogoHeaderProps) {
           height: iconSize,
           borderRadius: radius,
         }}
-        accessibilityLabel="Lyvee logo"
+        accessibilityLabel={`${APP_NAME} logo`}
       />
-      <Text style={styles.wordmark}>Lyvee</Text>
+      <Text style={styles.wordmark}>{APP_NAME}</Text>
       {tagline ? <Text style={styles.tagline}>{tagline}</Text> : null}
     </View>
   );

@@ -4,6 +4,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { addDays, isBefore, parseISO } from 'date-fns';
 import { Item, ItemReminderOffset, getReminderOptionLabel } from '../types';
+import { APP_NAME } from '../constants/app';
 import { expandItem } from '../utils/itemInstances';
 import { getItemsForNotification } from '../utils/notificationRules';
 import { formatRecurringLabel } from '../utils/recurrence';
@@ -52,44 +53,75 @@ function getExpoProjectId(): string | undefined {
   );
 }
 
-export async function ensureNotificationPermissions(): Promise<boolean> {
-  if (!Device.isDevice) return false;
+const NOTIFICATION_PERMISSIONS: Notifications.NotificationPermissionsRequest = {
+  ios: {
+    allowAlert: true,
+    allowBadge: true,
+    allowSound: true,
+  },
+  android: {},
+};
 
+function isNotificationPermissionGranted(
+  permissions: Notifications.NotificationPermissionsStatus
+): boolean {
+  return permissions.status === 'granted' || permissions.granted === true;
+}
+
+async function configureAndroidNotificationChannels(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+
+  await Notifications.setNotificationChannelAsync('reminders', {
+    name: `${APP_NAME} Reminders`,
+    importance: Notifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 250, 250, 250],
+  });
+  await Notifications.setNotificationChannelAsync('activity', {
+    name: `${APP_NAME} Activity`,
+    importance: Notifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 250, 250, 250],
+  });
+}
+
+export async function hasNotificationPermissions(): Promise<boolean> {
   try {
-    const { status: existing } = await Notifications.getPermissionsAsync();
-    let finalStatus = existing;
+    const permissions = await Notifications.getPermissionsAsync();
+    return isNotificationPermissionGranted(permissions);
+  } catch {
+    return false;
+  }
+}
 
-    if (existing !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
+export async function requestNotificationPermissions(): Promise<boolean> {
+  try {
+    const existing = await Notifications.getPermissionsAsync();
+    if (isNotificationPermissionGranted(existing)) {
+      await configureAndroidNotificationChannels();
+      return true;
     }
 
-    if (finalStatus !== 'granted') return false;
+    const permissions = await Notifications.requestPermissionsAsync(
+      NOTIFICATION_PERMISSIONS
+    );
 
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('reminders', {
-        name: 'Lyvee Reminders',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
-      });
-      await Notifications.setNotificationChannelAsync('activity', {
-        name: 'Lyvee Activity',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
-      });
-    }
+    if (!isNotificationPermissionGranted(permissions)) return false;
 
+    await configureAndroidNotificationChannels();
     return true;
   } catch {
     return false;
   }
 }
 
+export async function ensureNotificationPermissions(): Promise<boolean> {
+  return hasNotificationPermissions();
+}
+
 export async function registerForPushNotifications(): Promise<string | null> {
   const projectId = getExpoProjectId();
-  if (!projectId) return null;
+  if (!projectId || !Device.isDevice) return null;
 
-  const hasPermission = await ensureNotificationPermissions();
+  const hasPermission = await hasNotificationPermissions();
   if (!hasPermission) return null;
 
   try {
@@ -98,6 +130,28 @@ export async function registerForPushNotifications(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/** Prompts for OS notification permission, then registers push + local reminders. */
+export async function enableNotificationsForUser(
+  userId: string,
+  items: Item[] = []
+): Promise<boolean> {
+  const granted = await requestNotificationPermissions();
+  if (!granted) return false;
+
+  const token = await registerForPushNotifications();
+  if (token) {
+    const { registerPushToken } = await import('./auth');
+    await registerPushToken(userId, token);
+  }
+
+  if (items.length > 0) {
+    lastReminderSyncKey = '';
+    await syncItemNotifications(items, userId);
+  }
+
+  return true;
 }
 
 function getTypeLabel(item: Item): string {
@@ -202,7 +256,7 @@ export async function syncItemNotifications(
   items: Item[],
   userId: string
 ): Promise<void> {
-  const hasPermission = await ensureNotificationPermissions();
+  const hasPermission = await hasNotificationPermissions();
   if (!hasPermission) return;
 
   if (userId !== lastReminderSyncUserId) {

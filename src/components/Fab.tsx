@@ -5,18 +5,27 @@ import { colors, layout, radius, shadows, spacing } from '../constants/theme';
 
 interface FabProps extends TouchableOpacityProps {
   accessibilityLabel: string;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
+  /** Use inside a positioned parent instead of fixed bottom-right placement. */
+  embedded?: boolean;
 }
 
-export function Fab({ accessibilityLabel, style, ...props }: FabProps) {
+export function Fab({
+  accessibilityLabel,
+  style,
+  icon = 'add',
+  embedded = false,
+  ...props
+}: FabProps) {
   return (
     <TouchableOpacity
-      style={[styles.fab, style]}
+      style={[styles.fab, embedded && styles.fabEmbedded, style]}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       activeOpacity={0.85}
       {...props}
     >
-      <Ionicons name="add" size={30} color={colors.onPrimary} />
+      <Ionicons name={icon} size={30} color={colors.onPrimary} />
     </TouchableOpacity>
   );
 }
@@ -34,5 +43,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.fab,
     zIndex: 10,
+  },
+  fabEmbedded: {
+    position: 'relative',
+    right: undefined,
+    bottom: undefined,
+    zIndex: 0,
   },
 });

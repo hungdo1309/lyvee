@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,7 @@ import {
   Share,
   TouchableOpacity,
 } from 'react-native';
-import { router, useLocalSearchParams, type Href } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../../src/context/AuthContext';
 import { useApp } from '../../../src/context/AppContext';
@@ -14,34 +14,105 @@ import { Button } from '../../../src/components/Button';
 import { Card } from '../../../src/components/Card';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
 import { ScreenBackButton } from '../../../src/components/ScreenBackButton';
+import { OnboardingProgressHeader } from '../../../src/components/onboarding/OnboardingStepLayout';
 import {
   buildInviteMessage,
   ensureGroupInvite,
-  canManageGroup,
+  getGroupById,
+  isGroupOwner,
 } from '../../../src/services/groups';
+import { Group } from '../../../src/types';
 import { colors, layout, spacing, typography } from '../../../src/constants/theme';
-import { onboardingStepLabel } from '../../../src/constants/onboarding';
+import {
+  buildOnboardingHref,
+  getOnboardingSetupStepProps,
+  normalizeOnboardingGroupId,
+  normalizeOnboardingParam,
+  onboardingInviteSubtitle,
+} from '../../../src/constants/onboarding';
 
 export default function OnboardingInviteScreen() {
-  const { groupId } = useLocalSearchParams<{ groupId: string }>();
+  const params = useLocalSearchParams<{
+    groupId?: string | string[];
+    groupName?: string | string[];
+    inviteCode?: string | string[];
+  }>();
+  const groupId = normalizeOnboardingGroupId(params.groupId);
+  const groupName = normalizeOnboardingParam(params.groupName);
+  const inviteCode = normalizeOnboardingParam(params.inviteCode);
   const { user } = useAuth();
   const { groups, loading } = useApp();
   const inviteEnsuredRef = useRef<string | null>(null);
+  const [fetchedGroup, setFetchedGroup] = useState<Group | null>(null);
+  const [fetchingGroup, setFetchingGroup] = useState(false);
+  const setupStepProps = getOnboardingSetupStepProps(2);
 
-  const group = useMemo(
-    () => groups.find((entry) => entry.id === groupId) ?? null,
+  useEffect(() => {
+    if (groupId || loading) return;
+    router.replace(buildOnboardingHref('/(app)/onboarding/item-types'));
+  }, [groupId, loading]);
+
+  const contextGroup = useMemo(
+    () => (groupId ? groups.find((entry) => entry.id === groupId) ?? null : null),
     [groups, groupId]
   );
 
+  const paramGroup = useMemo(() => {
+    if (!groupId || !groupName || !inviteCode || !user) return null;
+    return {
+      id: groupId,
+      name: groupName,
+      inviteCode,
+      ownerId: user.id,
+      adminIds: [],
+      members: [user.id],
+      createdAt: new Date().toISOString(),
+    } satisfies Group;
+  }, [groupId, groupName, inviteCode, user]);
+
+  const group = contextGroup ?? fetchedGroup ?? paramGroup;
+
   useEffect(() => {
-    if (!group || !user || !canManageGroup(group, user.id)) return;
+    if (!groupId || contextGroup || paramGroup || loading) return;
+
+    let cancelled = false;
+    setFetchingGroup(true);
+
+    getGroupById(groupId)
+      .then((nextGroup) => {
+        if (!cancelled) {
+          setFetchedGroup(nextGroup);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setFetchingGroup(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [contextGroup, groupId, loading, paramGroup]);
+
+  useEffect(() => {
+    if (!groupId || loading || fetchingGroup || !user) return;
+    const authoritativeGroup = contextGroup ?? fetchedGroup;
+    if (!authoritativeGroup) return;
+    if (!isGroupOwner(authoritativeGroup, user.id)) {
+      router.replace(buildOnboardingHref('/(app)/onboarding/item-types', groupId));
+    }
+  }, [contextGroup, fetchedGroup, fetchingGroup, groupId, loading, user]);
+
+  useEffect(() => {
+    if (!group || !user || !isGroupOwner(group, user.id)) return;
     if (inviteEnsuredRef.current === group.id) return;
     inviteEnsuredRef.current = group.id;
     ensureGroupInvite(group).catch(() => {});
   }, [group, user]);
 
   const goNext = () => {
-    router.push(`/(app)/onboarding/item-types?groupId=${groupId}` as Href);
+    router.push(buildOnboardingHref('/(app)/onboarding/item-types', groupId));
   };
 
   const handleShare = async () => {
@@ -49,13 +120,20 @@ export default function OnboardingInviteScreen() {
     await Share.share({ message: buildInviteMessage(group) });
   };
 
-  if (loading) return <LoadingScreen />;
+  if (loading || !groupId || !user) {
+    return <LoadingScreen />;
+  }
 
   if (!group) {
+    if (fetchingGroup) return <LoadingScreen />;
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
           <Text style={styles.subtitle}>Group not found</Text>
+          <Button
+            title="Continue tour"
+            onPress={() => router.push(buildOnboardingHref('/(app)/onboarding/item-types'))}
+          />
           <Button
             title="Go back"
             variant="secondary"
@@ -66,48 +144,39 @@ export default function OnboardingInviteScreen() {
     );
   }
 
-  const canInvite = user ? canManageGroup(group, user.id) : false;
+  const authoritativeGroup = contextGroup ?? fetchedGroup;
+  if (authoritativeGroup && !isGroupOwner(authoritativeGroup, user.id)) {
+    return <LoadingScreen />;
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.backRow}>
-        <ScreenBackButton />
+        <ScreenBackButton showChevron />
       </View>
-      <View style={styles.header}>
-        <Text style={styles.step}>{onboardingStepLabel(2)}</Text>
-        <Text style={styles.title}>Invite members</Text>
-        <Text style={styles.subtitle}>
-          Optional — share your invite code so others can join "{group.name}".
-        </Text>
-      </View>
+      <OnboardingProgressHeader
+        {...setupStepProps}
+        title="Invite members"
+        subtitle={onboardingInviteSubtitle(group.name)}
+      />
 
       <View style={styles.body}>
-        {canInvite ? (
-          <Card style={styles.inviteCard}>
-            <Text style={styles.inviteLabel}>Invite code</Text>
-            <TouchableOpacity onPress={handleShare} activeOpacity={0.7}>
-              <Text style={styles.inviteCode}>{group.inviteCode}</Text>
-              <Text style={styles.inviteHint}>Tap to share code & link</Text>
-            </TouchableOpacity>
-          </Card>
-        ) : (
-          <Card style={styles.inviteCard}>
-            <Text style={styles.inviteHint}>
-              Ask the group owner for an invite code to add more members later.
-            </Text>
-          </Card>
-        )}
+        <Card style={styles.inviteCard}>
+          <Text style={styles.inviteLabel}>Invite code</Text>
+          <TouchableOpacity onPress={handleShare} activeOpacity={0.7}>
+            <Text style={styles.inviteCode}>{group.inviteCode}</Text>
+            <Text style={styles.inviteHint}>Tap to share code & link</Text>
+          </TouchableOpacity>
+        </Card>
       </View>
 
       <View style={styles.footer}>
-        {canInvite && (
-          <Button
-            title="Share Invite"
-            variant="secondary"
-            onPress={handleShare}
-            style={styles.footerButton}
-          />
-        )}
+        <Button
+          title="Share Invite"
+          variant="secondary"
+          onPress={handleShare}
+          style={styles.footerButton}
+        />
         <Button title="Continue" size="lg" onPress={goNext} />
         <Button
           title="Skip for now"
@@ -136,23 +205,9 @@ const styles = StyleSheet.create({
     padding: layout.screenPadding,
     gap: spacing.md,
   },
-  header: {
-    paddingHorizontal: layout.screenPadding,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
-  },
-  step: {
-    ...typography.label,
-    color: colors.primary,
-    marginBottom: spacing.sm,
-  },
-  title: {
-    ...typography.heading,
-    fontSize: 24,
-  },
   subtitle: {
     ...typography.caption,
-    marginTop: spacing.sm,
+    textAlign: 'center',
   },
   body: {
     flex: 1,

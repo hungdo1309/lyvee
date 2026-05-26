@@ -9,6 +9,7 @@ import type { ParamListBase, TabNavigationState } from '@react-navigation/native
 import { useApp } from '../../../src/context/AppContext';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
 import { TopTabBar } from '../../../src/components/TopTabBar';
+import { GROUPS_ICON_SIZES, GroupsIcon } from '../../../src/components/GroupsIcon';
 import { colors, layout, spacing } from '../../../src/constants/theme';
 
 const { Navigator } = createMaterialTopTabNavigator();
@@ -61,7 +62,9 @@ export default function TabsLayout() {
         name="groups"
         options={{
           title: 'Groups',
-          tabBarIcon: ({ color }) => <TabIcon icon="👥" activeColor={color} />,
+          tabBarIcon: ({ color }) => (
+            <GroupsIcon size={GROUPS_ICON_SIZES.tab} color={String(color)} />
+          ),
         }}
       />
       <MaterialTopTabs.Screen

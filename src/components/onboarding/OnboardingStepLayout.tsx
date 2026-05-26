@@ -6,7 +6,47 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScreenBackButton } from '../ScreenBackButton';
 import { Button } from '../Button';
 import { colors, layout, spacing, typography } from '../../constants/theme';
-import { ONBOARDING_TOTAL_STEPS } from '../../constants/onboarding';
+import {
+  ONBOARDING_TOUR_EXIT_LABEL,
+  ONBOARDING_TOTAL_STEPS,
+} from '../../constants/onboarding';
+import { useFinishOnboarding } from '../../hooks/useFinishOnboarding';
+
+interface OnboardingProgressHeaderProps {
+  step: number;
+  title: string;
+  subtitle: string;
+  totalSteps?: number;
+}
+
+export function OnboardingProgressHeader({
+  step,
+  title,
+  subtitle,
+  totalSteps = ONBOARDING_TOTAL_STEPS,
+}: OnboardingProgressHeaderProps) {
+  return (
+    <View style={styles.header}>
+      <Text style={styles.step}>
+        Step {step} of {totalSteps}
+      </Text>
+      <View style={styles.progressRow}>
+        {Array.from({ length: totalSteps }, (_, index) => (
+          <View
+            key={index}
+            style={[
+              styles.progressDot,
+              index < step && styles.progressDotComplete,
+              index === step - 1 && styles.progressDotActive,
+            ]}
+          />
+        ))}
+      </View>
+      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.subtitle}>{subtitle}</Text>
+    </View>
+  );
+}
 
 interface OnboardingStepLayoutProps {
   step: number;
@@ -17,9 +57,13 @@ interface OnboardingStepLayoutProps {
   continueLabel?: string;
   onSkip?: () => void;
   skipLabel?: string;
+  tourSkip?: boolean;
+  groupId?: string;
   loading?: boolean;
   showBack?: boolean;
   footerExtra?: ReactNode;
+  preserveContinueTitle?: boolean;
+  totalSteps?: number;
 }
 
 export function OnboardingStepLayout({
@@ -30,38 +74,35 @@ export function OnboardingStepLayout({
   onContinue,
   continueLabel = 'Continue',
   onSkip,
-  skipLabel = 'Skip for now',
+  skipLabel,
+  tourSkip = false,
+  groupId,
   loading = false,
   showBack = true,
   footerExtra,
+  preserveContinueTitle = false,
+  totalSteps,
 }: OnboardingStepLayoutProps) {
+  const { finish, finishing } = useFinishOnboarding();
+  const resolvedSkipLabel =
+    skipLabel ?? (tourSkip ? ONBOARDING_TOUR_EXIT_LABEL : 'Skip for now');
+  const handleSkip = tourSkip ? () => finish(groupId) : onSkip;
+  const isBusy = loading || finishing;
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {showBack ? (
         <View style={styles.backRow}>
-          <ScreenBackButton />
+          <ScreenBackButton showChevron />
         </View>
       ) : null}
 
-      <View style={styles.header}>
-        <Text style={styles.step}>
-          Step {step} of {ONBOARDING_TOTAL_STEPS}
-        </Text>
-        <View style={styles.progressRow}>
-          {Array.from({ length: ONBOARDING_TOTAL_STEPS }, (_, index) => (
-            <View
-              key={index}
-              style={[
-                styles.progressDot,
-                index < step && styles.progressDotComplete,
-                index === step - 1 && styles.progressDotActive,
-              ]}
-            />
-          ))}
-        </View>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
-      </View>
+      <OnboardingProgressHeader
+        step={step}
+        title={title}
+        subtitle={subtitle}
+        totalSteps={totalSteps}
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -73,13 +114,21 @@ export function OnboardingStepLayout({
 
       <View style={styles.footer}>
         {footerExtra}
-        <Button title={continueLabel} size="lg" onPress={onContinue} loading={loading} />
-        {onSkip ? (
+        <Button
+          title={continueLabel}
+          size="lg"
+          onPress={onContinue}
+          loading={isBusy}
+          disabled={isBusy}
+          preserveTitle={preserveContinueTitle}
+        />
+        {handleSkip ? (
           <Button
-            title={skipLabel}
+            title={resolvedSkipLabel}
             variant="ghost"
-            onPress={onSkip}
-            disabled={loading}
+            onPress={handleSkip}
+            disabled={isBusy}
+            preserveTitle={tourSkip}
             style={styles.skip}
           />
         ) : null}

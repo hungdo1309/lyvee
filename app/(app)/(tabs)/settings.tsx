@@ -9,6 +9,7 @@ import { Button } from '../../../src/components/Button';
 import { Card } from '../../../src/components/Card';
 import { InfoRow, SectionCard } from '../../../src/components/SectionCard';
 import { colors, layout, radius, spacing, typography } from '../../../src/constants/theme';
+import { APP_NAME } from '../../../src/constants/app';
 import { getNameInitials } from '../../../src/utils/names';
 import { formatMemberSince } from '../../../src/utils/dates';
 
@@ -75,7 +76,7 @@ export default function SettingsScreen() {
       </SectionCard>
 
       <SectionCard title="About">
-        <InfoRow label="App" value={`Lyvee v${appVersion}`} />
+        <InfoRow label="App" value={`${APP_NAME} v${appVersion}`} />
       </SectionCard>
 
       <View style={styles.footer}>

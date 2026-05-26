@@ -14,6 +14,7 @@ import { GroupSelector } from '../../../../src/components/GroupSelector';
 import { ScreenBackButton } from '../../../../src/components/ScreenBackButton';
 import { ItemCard } from '../../../../src/components/ItemCard';
 import { EmptyState } from '../../../../src/components/EmptyState';
+import { GroupsIcon } from '../../../../src/components/GroupsIcon';
 import { Fab } from '../../../../src/components/Fab';
 import { LoadingScreen } from '../../../../src/components/LoadingScreen';
 import { toggleItemComplete, deleteItem } from '../../../../src/services/items';
@@ -174,7 +175,7 @@ export default function GroupItemsScreen() {
           <Text style={styles.screenTitle}>All items</Text>
         </View>
         <EmptyState
-          icon="👥"
+          iconNode={<GroupsIcon />}
           title="Group not found"
           subtitle="Go back and open all items from a group you belong to."
           compact

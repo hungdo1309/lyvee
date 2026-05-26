@@ -22,6 +22,7 @@ import {
   type FeedbackScreen as FeedbackScreenName,
 } from '../../src/types';
 import { colors, layout, spacing, typography, radius } from '../../src/constants/theme';
+import { APP_NAME } from '../../src/constants/app';
 import { isFirebaseConfigured } from '../../src/config/firebase';
 
 export default function FeedbackScreen() {
@@ -93,7 +94,7 @@ export default function FeedbackScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <Text style={styles.subtitle}>
-            Tell us what you were doing and how we can improve Lyvee.
+            Tell us what you were doing and how we can improve {APP_NAME}.
           </Text>
 
           <Text style={styles.fieldLabel}>Screen</Text>

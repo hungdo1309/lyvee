@@ -1,15 +1,13 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
   InteractionManager,
-  Platform,
 } from 'react-native';
 import { appAlert } from '../../../../src/utils/dialog';
 import { FlatList } from 'react-native-gesture-handler';
-import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../../../src/context/AuthContext';
@@ -18,66 +16,163 @@ import { Input } from '../../../../src/components/Input';
 import { Button } from '../../../../src/components/Button';
 import { CancelButton } from '../../../../src/components/CancelButton';
 import { Card } from '../../../../src/components/Card';
-import { EmptyState } from '../../../../src/components/EmptyState';
+import { NoGroupsPrompt } from '../../../../src/components/NoGroupsPrompt';
 import { GroupCard } from '../../../../src/components/GroupCard';
 import { GroupDetailContent } from '../../../../src/components/GroupDetailContent';
 import { LoadingScreen } from '../../../../src/components/LoadingScreen';
 import { KeyboardAvoidingScreen } from '../../../../src/components/KeyboardAvoidingScreen';
-import { Fab } from '../../../../src/components/Fab';
+import { GroupsFabMenu } from '../../../../src/components/GroupsFabMenu';
 import { createGroup, joinGroupByInviteCode } from '../../../../src/services/groups';
 import { getMemberRole } from '../../../../src/utils/groupRoles';
+import type { Group } from '../../../../src/types';
+import {
+  clearGroupSetupIntent,
+  peekGroupSetupIntent,
+  subscribeGroupSetupIntent,
+  type GroupSetupIntent,
+} from '../../../../src/utils/groupSetupNavigation';
 import { colors, layout, radius, spacing, typography } from '../../../../src/constants/theme';
+
+function focusTextInput(ref: React.RefObject<TextInput | null>) {
+  InteractionManager.runAfterInteractions(() => {
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        ref.current?.focus();
+      }, 350);
+    });
+  });
+}
 
 export default function GroupsScreen() {
   const { user } = useAuth();
   const { groups, loading, selectGroup } = useApp();
-  const { create } = useLocalSearchParams<{ create?: string }>();
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState(
+    () => peekGroupSetupIntent() === 'create'
+  );
+  const [showJoinCard, setShowJoinCard] = useState(
+    () => peekGroupSetupIntent() === 'join'
+  );
   const [groupName, setGroupName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+  const [fabMenuOpen, setFabMenuOpen] = useState(false);
   const groupNameInputRef = useRef<TextInput>(null);
-  const skipNextFocusResetRef = useRef(false);
+  const inviteCodeInputRef = useRef<TextInput>(null);
+  const listRef = useRef<FlatList<Group> | null>(null);
+  const pendingFocusRef = useRef<'join' | 'create' | null>(peekGroupSetupIntent());
+  const isFocusedRef = useRef(false);
 
-  const scheduleCreateInputFocus = useCallback((delayMs = 150) => {
-    InteractionManager.runAfterInteractions(() => {
-      setTimeout(() => groupNameInputRef.current?.focus(), delayMs);
-    });
+  const focusCreateInput = useCallback(() => {
+    focusTextInput(groupNameInputRef);
   }, []);
 
-  const openCreateForm = useCallback(() => {
-    setShowCreate(true);
-    scheduleCreateInputFocus(150);
-  }, [scheduleCreateInputFocus]);
+  const focusJoinInput = useCallback(() => {
+    focusTextInput(inviteCodeInputRef);
+  }, []);
+
+  const focusPendingInput = useCallback(() => {
+    const pending = pendingFocusRef.current;
+    if (!pending || !isFocusedRef.current) return;
+
+    const inputRef = pending === 'create' ? groupNameInputRef : inviteCodeInputRef;
+    if (!inputRef.current) return;
+
+    pendingFocusRef.current = null;
+    if (pending === 'create') {
+      focusCreateInput();
+    } else {
+      focusJoinInput();
+    }
+  }, [focusCreateInput, focusJoinInput]);
+
+  const handleCreateSectionLayout = useCallback(() => {
+    if (pendingFocusRef.current !== 'create') return;
+    focusPendingInput();
+  }, [focusPendingInput]);
+
+  const handleJoinSectionLayout = useCallback(() => {
+    if (pendingFocusRef.current !== 'join') return;
+    focusPendingInput();
+  }, [focusPendingInput]);
+
+  const closeCreateForm = useCallback(() => {
+    clearGroupSetupIntent();
+    pendingFocusRef.current = null;
+    setShowCreate(false);
+    setGroupName('');
+  }, []);
+
+  const closeJoinForm = useCallback(() => {
+    clearGroupSetupIntent();
+    pendingFocusRef.current = null;
+    setShowJoinCard(false);
+    setInviteCode('');
+  }, []);
+
+  const scrollListToTop = useCallback((animated = true) => {
+    if (groups.length > 0) {
+      listRef.current?.scrollToOffset({ offset: 0, animated });
+    }
+  }, [groups.length]);
+
+  const applySetupIntent = useCallback((intent: GroupSetupIntent | null) => {
+    if (intent === 'join') {
+      setFabMenuOpen(false);
+      pendingFocusRef.current = 'join';
+      setShowJoinCard(true);
+      setShowCreate(false);
+      scrollListToTop();
+      return;
+    }
+
+    if (intent === 'create') {
+      setFabMenuOpen(false);
+      pendingFocusRef.current = 'create';
+      setShowCreate(true);
+      setShowJoinCard(false);
+      scrollListToTop();
+    }
+  }, [scrollListToTop]);
+
+  const toggleFabMenu = useCallback(() => {
+    setFabMenuOpen((open) => !open);
+  }, []);
+
+  const handleFabJoin = useCallback(() => {
+    applySetupIntent('join');
+  }, [applySetupIntent]);
+
+  const handleFabCreate = useCallback(() => {
+    applySetupIntent('create');
+  }, [applySetupIntent]);
 
   useFocusEffect(
     useCallback(() => {
-      if (create === '1') {
-        skipNextFocusResetRef.current = true;
-        setShowCreate(true);
-        scheduleCreateInputFocus(500);
-        router.replace('/(app)/(tabs)/groups' as Href);
-        return () => {
-          setShowCreate(false);
-        };
-      }
-
-      if (skipNextFocusResetRef.current) {
-        skipNextFocusResetRef.current = false;
-        return () => {
-          setShowCreate(false);
-        };
-      }
-
-      setShowCreate(false);
-      setGroupName('');
+      isFocusedRef.current = true;
+      const intent = peekGroupSetupIntent();
+      applySetupIntent(intent);
+      requestAnimationFrame(() => {
+        focusPendingInput();
+      });
 
       return () => {
-        setShowCreate(false);
+        isFocusedRef.current = false;
+        setFabMenuOpen(false);
       };
-    }, [create, scheduleCreateInputFocus])
+    }, [applySetupIntent, focusPendingInput])
   );
+
+  useEffect(() => {
+    return subscribeGroupSetupIntent(() => {
+      applySetupIntent(peekGroupSetupIntent());
+    });
+  }, [applySetupIntent]);
+
+  useEffect(() => {
+    if (!isFocusedRef.current) return;
+    focusPendingInput();
+  }, [showCreate, showJoinCard, focusPendingInput]);
 
   const handleCreate = async () => {
     if (!groupName.trim() || !user) return;
@@ -87,6 +182,7 @@ export default function GroupsScreen() {
       await selectGroup(group.id);
       setGroupName('');
       setShowCreate(false);
+      clearGroupSetupIntent();
       setExpandedGroupId(group.id);
     } catch (error: unknown) {
       appAlert('Error', error instanceof Error ? error.message : 'Failed to create group');
@@ -102,6 +198,8 @@ export default function GroupsScreen() {
       const group = await joinGroupByInviteCode(inviteCode.trim(), user.id);
       await selectGroup(group.id);
       setInviteCode('');
+      clearGroupSetupIntent();
+      setShowJoinCard(false);
       setExpandedGroupId(group.id);
     } catch (error: unknown) {
       appAlert('Error', error instanceof Error ? error.message : 'Invalid invite code');
@@ -110,20 +208,55 @@ export default function GroupsScreen() {
     }
   };
 
-  const listHeader = (
-    <View>
-      <Card style={styles.joinCard}>
-        <Text style={styles.joinTitle}>Join with invite code</Text>
-        <Input
-          value={inviteCode}
-          onChangeText={setInviteCode}
-          placeholder="6-character code"
-          autoCapitalize="characters"
-        />
-        <Button title="Join Group" onPress={handleJoin} loading={submitting} />
-      </Card>
+  const joinCardSection = (
+    <Card style={styles.joinCard}>
+      <Text style={styles.joinTitle}>Join with invite code</Text>
+      <Input
+        ref={inviteCodeInputRef}
+        value={inviteCode}
+        onChangeText={setInviteCode}
+        placeholder="6-character code"
+        autoCapitalize="characters"
+        showSoftInputOnFocus
+      />
+      <Button title="Join Group" onPress={handleJoin} loading={submitting} />
+      <CancelButton onPress={closeJoinForm} style={styles.formCancel} />
+    </Card>
+  );
 
-      {groups.length > 0 && (
+  const createFormSection = (
+    <Card style={styles.form}>
+      <Input
+        ref={groupNameInputRef}
+        label="Group name"
+        value={groupName}
+        onChangeText={setGroupName}
+        placeholder="e.g. Home, Family, Roommates"
+        showSoftInputOnFocus
+      />
+      <Button title="Create Group" onPress={handleCreate} loading={submitting} />
+      <CancelButton onPress={closeCreateForm} style={styles.formCancel} />
+    </Card>
+  );
+
+  const showEmptyPrompt =
+    groups.length === 0 &&
+    !showCreate &&
+    !showJoinCard &&
+    peekGroupSetupIntent() === null;
+  const showNoGroupSetup = groups.length === 0 && (showCreate || showJoinCard);
+
+  const listHeader =
+    groups.length > 0 ? (
+      <View>
+        {showCreate ? (
+          <View onLayout={handleCreateSectionLayout}>{createFormSection}</View>
+        ) : null}
+
+        {showJoinCard ? (
+          <View onLayout={handleJoinSectionLayout}>{joinCardSection}</View>
+        ) : null}
+
         <View style={styles.summaryBar}>
           <Text style={styles.summaryCount}>{groups.length}</Text>
           <View style={styles.summaryCopy}>
@@ -133,53 +266,44 @@ export default function GroupsScreen() {
             <Text style={styles.summaryHint}>Tap a group to expand details</Text>
           </View>
         </View>
-      )}
-    </View>
-  );
+      </View>
+    ) : null;
 
   if (loading) return <LoadingScreen />;
+
+  if (showEmptyPrompt) {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <NoGroupsPrompt />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <KeyboardAvoidingScreen style={styles.container}>
-        {showCreate && (
-          <View style={styles.createSection}>
-            <Card style={styles.form}>
-              <Input
-                ref={groupNameInputRef}
-                label="Group name"
-                value={groupName}
-                onChangeText={setGroupName}
-                placeholder="e.g. Home, Family, Roommates"
-              />
-              <Button title="Create Group" onPress={handleCreate} loading={submitting} />
-              <CancelButton
-                onPress={() => {
-                  setShowCreate(false);
-                  setGroupName('');
-                }}
-                style={styles.formCancel}
-              />
-            </Card>
+        {showNoGroupSetup && (
+          <View style={styles.setupSection}>
+            {showCreate ? (
+              <View onLayout={handleCreateSectionLayout}>{createFormSection}</View>
+            ) : null}
+            {showJoinCard ? (
+              <View onLayout={handleJoinSectionLayout}>{joinCardSection}</View>
+            ) : null}
           </View>
         )}
         <FlatList
+          ref={listRef}
           data={groups}
           keyExtractor={(g) => g.id}
+          extraData={`${showCreate}-${showJoinCard}`}
           contentContainerStyle={styles.list}
           nestedScrollEnabled
-          keyboardShouldPersistTaps="always"
-          keyboardDismissMode={showCreate ? 'none' : 'on-drag'}
-          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={showCreate || showJoinCard ? 'none' : 'on-drag'}
+          automaticallyAdjustKeyboardInsets
           ListHeaderComponent={listHeader}
-          ListEmptyComponent={
-            <EmptyState
-              icon="👥"
-              title="No groups yet"
-              subtitle="Create a group for your household or join one with an invite code."
-              compact
-            />
-          }
+          ListEmptyComponent={null}
           renderItem={({ item: group }) => {
             const role = user ? getMemberRole(group, user.id) : null;
             const roleLabel =
@@ -218,7 +342,14 @@ export default function GroupsScreen() {
         />
       </KeyboardAvoidingScreen>
 
-      <Fab onPress={openCreateForm} accessibilityLabel="Create group" />
+      {groups.length > 0 && (
+        <GroupsFabMenu
+          open={fabMenuOpen}
+          onToggle={toggleFabMenu}
+          onJoin={handleFabJoin}
+          onCreate={handleFabCreate}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -236,7 +367,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: spacing.sm,
   },
-  createSection: {
+  setupSection: {
     paddingHorizontal: layout.screenPadding,
     paddingTop: spacing.sm,
   },

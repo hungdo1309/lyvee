@@ -14,6 +14,7 @@ interface ButtonProps extends TouchableOpacityProps {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'cancel';
   loading?: boolean;
   size?: 'sm' | 'md' | 'lg';
+  preserveTitle?: boolean;
 }
 
 export function Button({
@@ -21,13 +22,14 @@ export function Button({
   variant = 'primary',
   loading = false,
   size = 'md',
+  preserveTitle = false,
   disabled,
   style,
   accessibilityLabel,
   ...props
 }: ButtonProps) {
   const isDisabled = disabled || loading;
-  const formattedTitle = formatButtonLabel(title);
+  const formattedTitle = preserveTitle ? title : formatButtonLabel(title);
 
   return (
     <TouchableOpacity

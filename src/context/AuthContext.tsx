@@ -44,12 +44,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const profile = await ensureUserProfile(fbUser);
         setUser(profile);
         try {
-          const { ensureNotificationPermissions, registerForPushNotifications } =
+          const { hasNotificationPermissions, registerForPushNotifications } =
             await import('../services/notifications');
-          await ensureNotificationPermissions();
-          const token = await registerForPushNotifications();
-          if (token && profile) {
-            await registerPushToken(fbUser.uid, token);
+          if (await hasNotificationPermissions()) {
+            const token = await registerForPushNotifications();
+            if (token && profile) {
+              await registerPushToken(fbUser.uid, token);
+            }
           }
         } catch {
           // Push tokens aren't available in Expo Go without an EAS project.
