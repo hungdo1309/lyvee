@@ -3,6 +3,10 @@ import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updateEmail,
+  updatePassword,
   User as FirebaseUser,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
@@ -30,9 +34,32 @@ function mapAuthError(error: unknown): string {
       return 'Password must be at least 6 characters';
     case 'auth/too-many-requests':
       return 'Too many attempts. Try again later';
+    case 'auth/requires-recent-login':
+      return 'Please sign in again with your current password';
+    case 'auth/operation-not-allowed':
+      return 'This change is not allowed for your account';
     default:
       return error instanceof Error ? error.message : 'Authentication failed';
   }
+}
+
+const profileCache = new Map<string, User | null>();
+const profileInflight = new Map<string, Promise<User | null>>();
+let lastRegisteredPushToken: { userId: string; token: string } | null = null;
+
+function cacheUserProfile(userId: string, user: User | null): User | null {
+  profileCache.set(userId, user);
+  return user;
+}
+
+export function clearUserProfileCache(userId?: string): void {
+  if (userId) {
+    profileCache.delete(userId);
+    profileInflight.delete(userId);
+    return;
+  }
+  profileCache.clear();
+  profileInflight.clear();
 }
 
 export async function ensureUserProfile(fbUser: FirebaseUser): Promise<User> {
@@ -87,13 +114,80 @@ export async function signIn(email: string, password: string): Promise<User> {
 }
 
 export async function signOut(): Promise<void> {
+  lastRegisteredPushToken = null;
+  clearUserProfileCache();
   await firebaseSignOut(auth);
 }
 
+async function reauthenticateWithPassword(currentPassword: string): Promise<void> {
+  const fbUser = auth.currentUser;
+  if (!fbUser?.email) {
+    throw new Error('You must be signed in with email and password');
+  }
+
+  const credential = EmailAuthProvider.credential(fbUser.email, currentPassword);
+  await reauthenticateWithCredential(fbUser, credential);
+}
+
+export async function changeUserEmail(
+  newEmail: string,
+  currentPassword: string
+): Promise<User> {
+  try {
+    const fbUser = auth.currentUser;
+    if (!fbUser) throw new Error('Not signed in');
+
+    const trimmed = newEmail.trim();
+    if (!trimmed) throw new Error('Email is required');
+
+    await reauthenticateWithPassword(currentPassword);
+    await updateEmail(fbUser, trimmed);
+    await updateUserProfile(fbUser.uid, { email: trimmed });
+    clearUserProfileCache(fbUser.uid);
+
+    const profile = await getUserProfile(fbUser.uid);
+    if (!profile) throw new Error('Failed to update profile');
+    return profile;
+  } catch (error) {
+    throw new Error(mapAuthError(error));
+  }
+}
+
+export async function changeUserPassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  try {
+    if (!auth.currentUser) throw new Error('Not signed in');
+
+    await reauthenticateWithPassword(currentPassword);
+    await updatePassword(auth.currentUser, newPassword);
+  } catch (error) {
+    throw new Error(mapAuthError(error));
+  }
+}
+
 export async function getUserProfile(userId: string): Promise<User | null> {
-  const snapshot = await getDoc(doc(db, 'users', userId));
-  if (!snapshot.exists()) return null;
-  return snapshot.data() as User;
+  if (profileCache.has(userId)) {
+    return profileCache.get(userId) ?? null;
+  }
+
+  const inflight = profileInflight.get(userId);
+  if (inflight) return inflight;
+
+  const request = getDoc(doc(db, 'users', userId))
+    .then((snapshot) =>
+      cacheUserProfile(
+        userId,
+        snapshot.exists() ? (snapshot.data() as User) : null
+      )
+    )
+    .finally(() => {
+      profileInflight.delete(userId);
+    });
+
+  profileInflight.set(userId, request);
+  return request;
 }
 
 export async function getUsersByIds(userIds: string[]): Promise<User[]> {
@@ -104,16 +198,44 @@ export async function getUsersByIds(userIds: string[]): Promise<User[]> {
 
 export async function updateUserProfile(
   userId: string,
-  updates: Partial<Pick<User, 'name' | 'pushToken' | 'pushTokens'>>
+  updates: Partial<Pick<User, 'name' | 'email' | 'pushToken' | 'pushTokens'>>
 ): Promise<void> {
   await setDoc(doc(db, 'users', userId), updates, { merge: true });
+  if (profileCache.has(userId)) {
+    const cached = profileCache.get(userId);
+    profileCache.set(userId, cached ? { ...cached, ...updates } : cached ?? null);
+  }
 }
 
 export async function registerPushToken(userId: string, token: string): Promise<void> {
+  if (
+    lastRegisteredPushToken?.userId === userId &&
+    lastRegisteredPushToken.token === token
+  ) {
+    return;
+  }
+
+  const cached = profileCache.get(userId);
+  if (
+    cached?.pushToken === token ||
+    cached?.pushTokens?.includes(token)
+  ) {
+    lastRegisteredPushToken = { userId, token };
+    return;
+  }
+
   await updateDoc(doc(db, 'users', userId), {
     pushToken: token,
     pushTokens: arrayUnion(token),
   });
+  lastRegisteredPushToken = { userId, token };
+  if (cached) {
+    profileCache.set(userId, {
+      ...cached,
+      pushToken: token,
+      pushTokens: [...new Set([...(cached.pushTokens ?? []), token])],
+    });
+  }
 }
 
 export function subscribeToAuth(

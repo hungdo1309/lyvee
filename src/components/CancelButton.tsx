@@ -25,7 +25,6 @@ export function CancelButton({
       onPress={onPress}
       disabled={disabled}
       style={style}
-      accessibilityLabel={label}
     />
   );
 }

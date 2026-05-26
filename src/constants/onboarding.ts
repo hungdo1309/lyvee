@@ -55,6 +55,12 @@ export function getOnboardingItemTypeColor(type: ItemType): string {
 
 export const ONBOARDING_CALENDAR_FEATURES: OnboardingFeatureItem[] = [
   {
+    icon: 'home-outline',
+    title: 'Home tab',
+    description:
+      'See what is coming up in the next two weeks. Expand a day to view or complete items.',
+  },
+  {
     icon: 'calendar-outline',
     title: 'Calendar tab',
     description:
@@ -62,9 +68,9 @@ export const ONBOARDING_CALENDAR_FEATURES: OnboardingFeatureItem[] = [
   },
   {
     icon: 'list-outline',
-    title: 'Items tab',
+    title: 'All items',
     description:
-      'Browse active and expired items by type. Filter with tags or show expired entries.',
+      'Expand a group and tap View all items to browse active and completed entries by type.',
   },
   {
     icon: 'people-outline',
@@ -91,7 +97,7 @@ export const ONBOARDING_SHARING_FEATURES: OnboardingFeatureItem[] = [
     icon: 'pricetag-outline',
     title: 'Organize with tags',
     description:
-      'Add tags like “kids”, “bills”, or “travel” to filter quickly on Calendar and Items.',
+      'Add tags like “kids”, “bills”, or “travel” to filter quickly on Home and Calendar.',
   },
 ];
 

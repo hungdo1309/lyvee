@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Swipeable, TouchableOpacity } from 'react-native-gesture-handler';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { User, Group } from '../types';
 import { getNameInitials } from '../utils/names';
 import {
@@ -111,7 +112,11 @@ export function GroupMemberRow({
               accessibilityRole="button"
               accessibilityLabel="Assign role"
             >
-              <Ionicons name="shield-outline" size={ACTION_ICON_SIZE} color={colors.onPrimary} />
+              <MaterialCommunityIcons
+                name="badge-account-outline"
+                size={ACTION_ICON_SIZE}
+                color={colors.onPrimary}
+              />
             </TouchableOpacity>
           )}
           {canRemove && (

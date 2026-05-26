@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,37 +9,36 @@ import {
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../../src/context/AuthContext';
+import { useApp } from '../../../src/context/AppContext';
 import { Button } from '../../../src/components/Button';
 import { Card } from '../../../src/components/Card';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
 import { ScreenBackButton } from '../../../src/components/ScreenBackButton';
 import {
-  subscribeToGroup,
   buildInviteMessage,
   ensureGroupInvite,
   canManageGroup,
 } from '../../../src/services/groups';
 import { colors, layout, spacing, typography } from '../../../src/constants/theme';
 import { onboardingStepLabel } from '../../../src/constants/onboarding';
-import { Group } from '../../../src/types';
 
 export default function OnboardingInviteScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const { user } = useAuth();
-  const [group, setGroup] = useState<Group | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { groups, loading } = useApp();
+  const inviteEnsuredRef = useRef<string | null>(null);
+
+  const group = useMemo(
+    () => groups.find((entry) => entry.id === groupId) ?? null,
+    [groups, groupId]
+  );
 
   useEffect(() => {
-    if (!groupId) return;
-    const unsubscribe = subscribeToGroup(groupId, (fetched) => {
-      setGroup(fetched);
-      setLoading(false);
-      if (fetched && user && canManageGroup(fetched, user.id)) {
-        ensureGroupInvite(fetched).catch(() => {});
-      }
-    });
-    return unsubscribe;
-  }, [groupId, user]);
+    if (!group || !user || !canManageGroup(group, user.id)) return;
+    if (inviteEnsuredRef.current === group.id) return;
+    inviteEnsuredRef.current = group.id;
+    ensureGroupInvite(group).catch(() => {});
+  }, [group, user]);
 
   const goNext = () => {
     router.push(`/(app)/onboarding/item-types?groupId=${groupId}` as Href);

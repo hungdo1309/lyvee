@@ -7,6 +7,7 @@ import {
   TouchableOpacityProps,
 } from 'react-native';
 import { colors, layout, radius, spacing } from '../constants/theme';
+import { formatButtonLabel } from '../utils/strings';
 
 interface ButtonProps extends TouchableOpacityProps {
   title: string;
@@ -22,9 +23,11 @@ export function Button({
   size = 'md',
   disabled,
   style,
+  accessibilityLabel,
   ...props
 }: ButtonProps) {
   const isDisabled = disabled || loading;
+  const formattedTitle = formatButtonLabel(title);
 
   return (
     <TouchableOpacity
@@ -38,6 +41,7 @@ export function Button({
       disabled={isDisabled}
       activeOpacity={0.7}
       {...props}
+      accessibilityLabel={accessibilityLabel ?? formattedTitle}
     >
       {loading ? (
         <ActivityIndicator
@@ -48,7 +52,7 @@ export function Button({
           }
         />
       ) : (
-        <Text style={[styles.text, styles[`text_${variant}`]]}>{title}</Text>
+        <Text style={[styles.text, styles[`text_${variant}`]]}>{formattedTitle}</Text>
       )}
     </TouchableOpacity>
   );

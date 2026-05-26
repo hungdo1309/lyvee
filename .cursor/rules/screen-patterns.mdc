@@ -1,0 +1,25 @@
+---
+description: Match existing Lyvee screen and navigation patterns
+alwaysApply: true
+---
+
+# Follow existing UI patterns
+
+Unless the user asks for something different, **match patterns already in the codebase** before inventing new layout or navigation.
+
+## Sub-screens (pushed from tabs, settings, groups)
+
+Reference: `app/(app)/group/[groupId]/items.tsx`
+
+- Keep `headerShown: false` on the stack route; use an in-screen header instead of the native stack header.
+- Wrap with `SafeAreaView` using `edges={['top', 'bottom']}`.
+- Header block:
+  - `ScreenBackButton` with a descriptive label (e.g. `Back to Settings`, `Back to Groups`) and `showChevron`
+  - Screen title below using `typography.heading`, `fontSize: 24`
+- Header padding: `paddingHorizontal: layout.screenPadding`, `paddingBottom: spacing.sm`
+- Reuse shared components (`Button`, `Input`, `SectionCard`, `ScreenBackButton`, etc.) and theme tokens from `src/constants/theme.ts`.
+
+## Before finishing UI work
+
+- Scan similar screens in the same flow and mirror their structure.
+- Do not add native stack headers for screens that elsewhere use `ScreenBackButton`.

@@ -4,17 +4,19 @@ import React, {
   useEffect,
   useState,
   useCallback,
+  useRef,
+  useMemo,
 } from 'react';
 import { subscribeToUserGroups } from '../services/groups';
-import { subscribeToAllUserItems } from '../services/items';
+import { backfillVisibleToForGroup, createAllUserItemsSubscription } from '../services/items';
 import { syncItemNotifications } from '../services/notifications';
 import {
-  loadActiveGroupSession,
   saveActiveGroupSession,
   clearActiveGroupSession,
   loadOnboardingComplete,
   saveOnboardingComplete,
 } from '../services/session';
+import { getGroupIdWithEarliestUpcoming } from '../utils/itemInstances';
 import { useAuth } from './AuthContext';
 import { Group, Item } from '../types';
 
@@ -44,6 +46,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [sessionLoaded, setSessionLoaded] = useState(false);
   const [groupsLoaded, setGroupsLoaded] = useState(false);
+  const [itemsReady, setItemsReady] = useState(false);
+  const userPickedGroupRef = useRef(false);
+  const initialGroupAppliedRef = useRef(false);
+  const itemsSubscriptionRef = useRef<ReturnType<
+    typeof createAllUserItemsSubscription
+  > | null>(null);
+  const visibleToBackfillRef = useRef<Set<string>>(new Set());
+
+  const groupIdsKey = useMemo(
+    () => groups.map((group) => group.id).sort().join(','),
+    [groups]
+  );
+
+  const groupIds = useMemo(
+    () => (groupIdsKey ? groupIdsKey.split(',') : []),
+    [groupIdsKey]
+  );
 
   useEffect(() => {
     if (!user) {
@@ -54,24 +73,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setOnboardingComplete(false);
       setSessionLoaded(false);
       setGroupsLoaded(false);
+      setItemsReady(false);
+      userPickedGroupRef.current = false;
+      initialGroupAppliedRef.current = false;
+      visibleToBackfillRef.current.clear();
       return;
     }
 
+    userPickedGroupRef.current = false;
+    initialGroupAppliedRef.current = false;
     setSessionLoaded(false);
-    Promise.all([
-      loadActiveGroupSession(user.id),
-      loadOnboardingComplete(user.id),
-    ]).then(async ([savedGroupId, onboardingDone]) => {
-      if (savedGroupId) {
-        setActiveGroupId(savedGroupId);
-        setHasSelectedGroup(true);
-      }
-      let complete = onboardingDone;
-      if (savedGroupId && !onboardingDone) {
-        await saveOnboardingComplete(user.id);
-        complete = true;
-      }
-      setOnboardingComplete(complete);
+    setItemsReady(false);
+
+    loadOnboardingComplete(user.id).then(async (onboardingDone) => {
+      setOnboardingComplete(onboardingDone);
       setSessionLoaded(true);
     });
   }, [user]);
@@ -89,14 +104,57 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [user, firebaseUser]);
 
   useEffect(() => {
-    if (!user || !sessionLoaded || !groupsLoaded) return;
+    if (!user || !firebaseUser || groups.length === 0) return;
 
-    const activeGroupValid =
-      hasSelectedGroup &&
-      activeGroupId &&
-      groups.some((group) => group.id === activeGroupId);
+    for (const group of groups) {
+      if (visibleToBackfillRef.current.has(group.id)) continue;
+      visibleToBackfillRef.current.add(group.id);
+      backfillVisibleToForGroup(group.id, group.members).catch((error) => {
+        visibleToBackfillRef.current.delete(group.id);
+        console.warn('[items] visibleTo backfill failed:', error);
+      });
+    }
+  }, [user, firebaseUser, groupIdsKey]);
 
-    if (activeGroupValid) return;
+  useEffect(() => {
+    if (!user || !firebaseUser) {
+      itemsSubscriptionRef.current?.destroy();
+      itemsSubscriptionRef.current = null;
+      return;
+    }
+
+    const subscription = createAllUserItemsSubscription(user.id, (fetched) => {
+      setItems(fetched);
+      setItemsReady(true);
+      syncItemNotifications(fetched, user.id);
+    });
+    itemsSubscriptionRef.current = subscription;
+
+    return () => {
+      subscription.destroy();
+      itemsSubscriptionRef.current = null;
+    };
+  }, [user, firebaseUser]);
+
+  useEffect(() => {
+    if (!user || !firebaseUser) return;
+
+    const subscription = itemsSubscriptionRef.current;
+    if (!subscription) return;
+
+    if (groupIds.length === 0) {
+      subscription.setGroupIds([]);
+      setItems([]);
+      setItemsReady(true);
+      return;
+    }
+
+    setItemsReady(false);
+    subscription.setGroupIds(groupIds);
+  }, [user, firebaseUser, groupIdsKey]);
+
+  useEffect(() => {
+    if (!user || !sessionLoaded || !groupsLoaded || !itemsReady) return;
 
     if (groups.length === 0) {
       if (hasSelectedGroup || activeGroupId) {
@@ -104,40 +162,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setActiveGroupId(null);
         setHasSelectedGroup(false);
       }
+      initialGroupAppliedRef.current = false;
       return;
     }
 
-    const defaultGroupId = groups[0].id;
+    const activeGroupStillValid =
+      !!activeGroupId && groups.some((group) => group.id === activeGroupId);
+
+    if (userPickedGroupRef.current && activeGroupStillValid) {
+      return;
+    }
+
+    if (initialGroupAppliedRef.current && activeGroupStillValid) {
+      return;
+    }
+
+    const defaultGroupId = getGroupIdWithEarliestUpcoming(groups, items);
     setActiveGroupId(defaultGroupId);
     setHasSelectedGroup(true);
     saveActiveGroupSession(user.id, defaultGroupId);
+    initialGroupAppliedRef.current = true;
+    userPickedGroupRef.current = false;
   }, [
     user,
     sessionLoaded,
     groupsLoaded,
+    itemsReady,
     hasSelectedGroup,
     activeGroupId,
     groups,
+    items,
   ]);
-
-  useEffect(() => {
-    if (!user || !firebaseUser || groups.length === 0) {
-      setItems([]);
-      return;
-    }
-
-    const groupIds = groups.map((g) => g.id);
-    const unsubItems = subscribeToAllUserItems(groupIds, user.id, (fetched) => {
-      setItems(fetched);
-      syncItemNotifications(fetched, user.id);
-    });
-
-    return unsubItems;
-  }, [user, firebaseUser, groups]);
 
   const selectGroup = useCallback(
     async (groupId: string) => {
       if (!user) return;
+      userPickedGroupRef.current = true;
       setActiveGroupId(groupId);
       setHasSelectedGroup(true);
       await saveActiveGroupSession(user.id, groupId);
@@ -147,6 +207,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const clearGroupSelection = useCallback(async () => {
     if (!user) return;
+    userPickedGroupRef.current = false;
+    initialGroupAppliedRef.current = false;
     setActiveGroupId(null);
     setHasSelectedGroup(false);
     await clearActiveGroupSession(user.id);
@@ -159,14 +221,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const activeGroup =
-    groups.find((g) => g.id === activeGroupId) ?? null;
+    groups.find((group) => group.id === activeGroupId) ?? null;
 
   const getGroupItems = useCallback(
     (groupId: string) => items.filter((item) => item.groupId === groupId),
     [items]
   );
 
-  const ready = sessionLoaded && groupsLoaded;
+  const ready = sessionLoaded && groupsLoaded && itemsReady;
   const loading = !ready && !!user;
 
   return (

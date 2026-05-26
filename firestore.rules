@@ -203,6 +203,9 @@ service cloud.firestore {
         && request.resource.data.recipientIds is list
         && request.resource.data.recipientIds.size() > 0
         && request.resource.data.recipientIds.size() <= 50
+        && request.resource.data.pushTokens is list
+        && request.resource.data.pushTokens.size() > 0
+        && request.resource.data.pushTokens.size() <= 100
         && request.resource.data.title is string
         && request.resource.data.body is string
         && request.resource.data.status == 'pending';

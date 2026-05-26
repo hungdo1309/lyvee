@@ -25,5 +25,6 @@ export interface PushEventInput {
   recipientIds: string[];
   title: string;
   body: string;
+  actorName?: string;
   data?: PushNotificationData;
 }

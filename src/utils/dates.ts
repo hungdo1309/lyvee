@@ -2,6 +2,7 @@ import {
   format,
   parseISO,
   isToday,
+  isTomorrow,
   isThisYear,
 } from 'date-fns';
 import { ItemInstance } from './itemInstances';
@@ -11,6 +12,27 @@ export function formatItemDate(dateTime: string | null): string {
   const date = parseISO(dateTime);
   if (isToday(date)) return `Today, ${format(date, 'h:mm a')}`;
   return format(date, 'MMM d, yyyy · h:mm a');
+}
+
+export function formatUpcomingDayHeader(dateKey: string, count: number): string {
+  const date = parseISO(dateKey);
+  let label: string;
+  if (isToday(date)) {
+    label = 'Today';
+  } else if (isTomorrow(date)) {
+    label = 'Tomorrow';
+  } else {
+    label = format(date, 'EEEE, MMM d');
+  }
+  const countLabel = count === 1 || count === 0 ? `${count} item` : `${count} items`;
+  return `${label} · ${countLabel}`;
+}
+
+export function formatUpcomingSectionTitle(dateKey: string): string {
+  const date = parseISO(dateKey);
+  if (isToday(date)) return 'Today';
+  if (isTomorrow(date)) return 'Tomorrow';
+  return format(date, 'EEEE, MMM d');
 }
 
 export function formatItemDateShort(dateTime: string | null): string {
@@ -34,6 +56,12 @@ export function formatInstanceDate(instance: ItemInstance): string {
   const formatted = formatItemDate(instance.occurrenceDate);
   if (instance.isRecurring) return `${formatted} · Repeats`;
   return formatted;
+}
+
+export function formatMemberSince(dateTime: string): string {
+  const date = new Date(dateTime);
+  if (Number.isNaN(date.getTime())) return '';
+  return `Member since ${format(date, 'MMMM yyyy')}`;
 }
 
 export function toISODateTime(date: Date): string {

@@ -9,10 +9,19 @@
       ]
     },
     {
-      "collectionGroup": "groups",
+      "collectionGroup": "items",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "inviteCode", "order": "ASCENDING" }
+        { "fieldPath": "groupId", "order": "ASCENDING" },
+        { "fieldPath": "visibility", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "groupId", "order": "ASCENDING" },
+        { "fieldPath": "visibleTo", "arrayConfig": "CONTAINS" }
       ]
     }
   ],

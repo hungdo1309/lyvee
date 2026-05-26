@@ -29,8 +29,6 @@ import {
   ItemInstance,
   getMonthInstanceCounts,
   formatMonthItemSummary,
-  getActiveListInstance,
-  getExpiredListInstance,
 } from '../../../src/utils/itemInstances';
 import { format, parseISO } from 'date-fns';
 import { colors, layout, radius, spacing, typography } from '../../../src/constants/theme';
@@ -59,17 +57,6 @@ export default function CalendarScreen() {
     () => filterItemsByCalendarFilters(groupItems, filters, user?.id),
     [groupItems, filters, user?.id]
   );
-
-  const expiredCountForFilter = useMemo(() => {
-    const filtered = filterItemsByCalendarFilters(
-      groupItems,
-      { ...filters, showExpired: false },
-      user?.id
-    );
-    return filtered.filter(
-      (item) => !getActiveListInstance(item) && getExpiredListInstance(item)
-    ).length;
-  }, [groupItems, filters, user?.id]);
 
   const monthItemSummary = useMemo(() => {
     const month = parseISO(visibleMonth);
@@ -101,7 +88,7 @@ export default function CalendarScreen() {
   };
 
   const handleDeleteItem = async (instance: ItemInstance) => {
-    await deleteItem(instance.itemId, user?.id);
+    await deleteItem(instance.itemId, user?.id, instance.item);
   };
 
   const handleGroupChange = async (groupId: string) => {
@@ -184,7 +171,6 @@ export default function CalendarScreen() {
                 filters={filters}
                 onChange={setFilters}
                 availableTags={availableTags}
-                expiredCount={expiredCountForFilter}
               />
             )}
 

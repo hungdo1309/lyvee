@@ -1,0 +1,31 @@
+---
+description: Optimize every change for Firebase cost and efficiency
+alwaysApply: true
+---
+
+# Firebase cost optimization
+
+For **every** user request, consider whether the work can be done with fewer Firestore reads, writes, listeners, and Cloud Function invocations. Prefer the smallest change that meets the requirement **and** stays cost-efficient.
+
+## Before finishing any task
+
+- Ask: does this add or widen a real-time listener, query, or write path? If yes, justify it or choose a cheaper alternative.
+- Prefer **narrow queries** (`where`, `orderBy`, limits) over fetching whole collections and filtering client-side.
+- Prefer **one shared subscription** (e.g. app-level context) over duplicate `onSnapshot` listeners on the same data.
+- Unsubscribe from listeners when screens unmount or data is no longer needed.
+- Prefer **targeted reads** (`getDoc`, bounded `getDocs`) over always-on listeners when data rarely changes.
+- Batch related writes with `writeBatch` instead of many separate writes.
+- Keep documents small; avoid storing or syncing fields the UI does not need.
+- Avoid redundant writes (debounce autosave, skip no-op updates, use `merge` only when needed).
+- For Cloud Functions: minimize triggers, cold starts, and fan-out; avoid work that the client can do safely.
+- For push: skip enqueue when no recipient has a push token; embed resolved tokens in the event so the function does not re-read `users`; delete processed `pushEvents` instead of keeping/updating them.
+
+## Lyvee conventions
+
+- Item visibility is enforced in the app; still **query by `groupId`** (and indexes) rather than loading all items when a subset suffices.
+- Reuse existing services in `src/services/` instead of adding parallel Firestore access patterns.
+- When adding UI that needs counts or lists, derive from data already loaded before adding a new subscription.
+
+## When reporting done
+
+Briefly note any Firebase cost impact (new listeners/queries/writes avoided or added) when the change touches data loading, sync, or backend logic.

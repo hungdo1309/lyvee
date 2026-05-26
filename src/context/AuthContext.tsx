@@ -13,6 +13,8 @@ import {
   subscribeToAuth,
   ensureUserProfile,
   registerPushToken,
+  changeUserEmail,
+  changeUserPassword,
 } from '../services/auth';
 import { clearActiveGroupSession } from '../services/session';
 import { User } from '../types';
@@ -23,6 +25,8 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<User>;
   register: (email: string, password: string, name: string) => Promise<User>;
+  changeEmail: (newEmail: string, currentPassword: string) => Promise<User>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -75,6 +79,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const changeEmail = useCallback(async (newEmail: string, currentPassword: string) => {
+    const profile = await changeUserEmail(newEmail, currentPassword);
+    setUser(profile);
+    return profile;
+  }, []);
+
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      await changeUserPassword(currentPassword, newPassword);
+    },
+    []
+  );
+
   const logout = useCallback(async () => {
     const userId = user?.id;
     await signOut();
@@ -85,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, firebaseUser, loading, login, register, logout }}
+      value={{ user, firebaseUser, loading, login, register, changeEmail, changePassword, logout }}
     >
       {children}
     </AuthContext.Provider>

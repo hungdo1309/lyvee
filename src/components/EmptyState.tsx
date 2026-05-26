@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Card } from './Card';
 import { colors, radius, spacing, typography } from '../constants/theme';
+import { formatButtonLabel } from '../utils/strings';
 
 interface EmptyStateProps {
   icon?: string;
@@ -30,7 +31,7 @@ export function EmptyState({
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       {action ? (
         <Text style={styles.action} onPress={action.onPress}>
-          {action.label}
+          {formatButtonLabel(action.label)}
         </Text>
       ) : null}
     </View>

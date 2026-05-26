@@ -4,6 +4,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   type StyleProp,
+  type TouchableOpacityProps,
   type ViewStyle,
 } from 'react-native';
 import { colors, layout, radius, shadows, spacing } from '../constants/theme';
@@ -16,6 +17,8 @@ interface CardProps {
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
   padded?: boolean;
+  accessibilityRole?: TouchableOpacityProps['accessibilityRole'];
+  accessibilityState?: TouchableOpacityProps['accessibilityState'];
 }
 
 export function Card({
@@ -24,6 +27,8 @@ export function Card({
   onPress,
   style,
   padded = true,
+  accessibilityRole,
+  accessibilityState,
 }: CardProps) {
   const content = (
     <View
@@ -42,7 +47,12 @@ export function Card({
 
   if (onPress) {
     return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.72}>
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.72}
+        accessibilityRole={accessibilityRole}
+        accessibilityState={accessibilityState}
+      >
         {content}
       </TouchableOpacity>
     );

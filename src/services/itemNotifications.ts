@@ -20,6 +20,7 @@ export async function notifyItemCreated(item: Item, actorId: string): Promise<vo
   await enqueuePushEvent({
     type: 'item.created',
     actorId,
+    actorName: name,
     recipientIds: assignees,
     title: 'New assignment',
     body: `${name} assigned you "${item.title}".`,
@@ -55,6 +56,7 @@ export async function notifyItemUpdated(
   await enqueuePushEvent({
     type: 'item.updated',
     actorId,
+    actorName: name,
     recipientIds,
     title: 'Item updated',
     body: `${name} updated "${after.title}".`,
@@ -70,6 +72,7 @@ export async function notifyItemDeleted(item: Item, actorId: string): Promise<vo
   await enqueuePushEvent({
     type: 'item.deleted',
     actorId,
+    actorName: name,
     recipientIds,
     title: 'Item deleted',
     body: `${name} deleted "${item.title}".`,
@@ -89,6 +92,7 @@ export async function notifyItemCompleted(
   await enqueuePushEvent({
     type: 'item.completed',
     actorId,
+    actorName: name,
     recipientIds,
     title: 'Item completed',
     body: `${name} completed "${item.title}".`,

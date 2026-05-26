@@ -120,7 +120,9 @@ export default function EditItemScreen() {
           dateTime: hasDate ? toISODateTime(dateTime) : null,
           reminderOffset: normalizeReminderOffset(hasDate, type, reminderOffset),
         },
-        user?.id
+        user?.id,
+        true,
+        item
       );
       dismissItemFlow();
     } catch (error: unknown) {

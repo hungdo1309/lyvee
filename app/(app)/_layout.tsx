@@ -1,7 +1,6 @@
 import { Stack, Redirect } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { LoadingScreen } from '../../src/components/LoadingScreen';
-import { colors } from '../../src/constants/theme';
 
 export default function AppLayout() {
   const { user, loading } = useAuth();
@@ -15,18 +14,11 @@ export default function AppLayout() {
       <Stack.Screen name="onboarding" />
       <Stack.Screen name="select-group" />
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="group" />
       <Stack.Screen name="item" />
-      <Stack.Screen
-        name="feedback"
-        options={{
-          headerShown: true,
-          title: 'Send Feedback',
-          headerBackTitle: 'Settings',
-          headerTintColor: colors.primary,
-          headerStyle: { backgroundColor: colors.background },
-          headerShadowVisible: false,
-        }}
-      />
+      <Stack.Screen name="feedback" />
+      <Stack.Screen name="change-email" />
+      <Stack.Screen name="change-password" />
     </Stack>
   );
 }

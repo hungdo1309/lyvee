@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -41,7 +41,6 @@ export function GroupPicker({
 }: GroupPickerProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [searchQuery, setSearchQuery] = useState('');
-  const searchInputRef = useRef<TextInput>(null);
 
   const selectedGroup = useMemo(
     () => groups.find((group) => group.id === groupId) ?? groups[0],
@@ -53,16 +52,6 @@ export function GroupPicker({
     if (!query) return groups;
     return groups.filter((group) => matchesGroupSearch(group.name, query));
   }, [groups, searchQuery]);
-
-  useEffect(() => {
-    if (!open) {
-      setSearchQuery('');
-      return;
-    }
-
-    const timer = setTimeout(() => searchInputRef.current?.focus(), 50);
-    return () => clearTimeout(timer);
-  }, [open]);
 
   if (groups.length === 0 || !selectedGroup) return null;
 
@@ -79,6 +68,11 @@ export function GroupPicker({
     setSearchQuery('');
   };
 
+  const handleOpen = () => {
+    setSearchQuery('');
+    setOpen(true);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
@@ -86,51 +80,56 @@ export function GroupPicker({
         {headerAction}
       </View>
 
-      {canChange && open ? (
-        <View style={[styles.field, styles.fieldOpen]}>
-          <TextInput
-            ref={searchInputRef}
-            style={styles.fieldInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            spellCheck={false}
-            autoComplete="off"
-            returnKeyType="search"
-          />
-          <TouchableOpacity
-            onPress={closeDropdown}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityRole="button"
-            accessibilityLabel="Close group search"
-          >
-            <Ionicons name="chevron-up" size={18} color={colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <TouchableOpacity
-          style={styles.field}
-          onPress={() => {
-            if (canChange) setOpen(true);
-          }}
-          disabled={!canChange}
-          accessibilityRole={canChange ? 'button' : 'text'}
-          accessibilityState={{ expanded: open, disabled: !canChange }}
-        >
+      {canChange ? (
+        <View style={[styles.field, open && styles.fieldOpen]}>
           <Text style={styles.fieldValue} numberOfLines={1}>
             {selectedGroup.name}
           </Text>
-          {canChange ? (
-            <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
-          ) : null}
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              if (open) {
+                closeDropdown();
+              } else {
+                handleOpen();
+              }
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel={open ? 'Close group list' : 'Show group list'}
+            accessibilityState={{ expanded: open }}
+          >
+            <Ionicons
+              name={open ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.field}>
+          <Text style={styles.fieldValue} numberOfLines={1}>
+            {selectedGroup.name}
+          </Text>
+        </View>
       )}
 
       {canChange && open && (
         <View style={styles.menu}>
+          <View style={styles.searchRow}>
+            <Ionicons name="search-outline" size={16} color={colors.textMuted} />
+            <TextInput
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              autoComplete="off"
+              returnKeyType="search"
+            />
+          </View>
           <ScrollView
             style={styles.menuScroll}
             keyboardShouldPersistTaps="handled"
@@ -214,12 +213,20 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.text,
   },
-  fieldInput: {
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
+  },
+  searchInput: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 15,
     color: colors.text,
-    paddingVertical: 0,
+    paddingVertical: spacing.xs,
   },
   menu: {
     marginTop: spacing.xs,

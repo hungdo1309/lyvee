@@ -26,12 +26,11 @@ import { KeyboardAvoidingScreen } from '../../../../src/components/KeyboardAvoid
 import { Fab } from '../../../../src/components/Fab';
 import { createGroup, joinGroupByInviteCode } from '../../../../src/services/groups';
 import { getMemberRole } from '../../../../src/utils/groupRoles';
-import { countActiveItems, formatActiveItemCount } from '../../../../src/utils/itemInstances';
 import { colors, layout, radius, spacing, typography } from '../../../../src/constants/theme';
 
 export default function GroupsScreen() {
   const { user } = useAuth();
-  const { groups, items, loading, selectGroup } = useApp();
+  const { groups, loading, selectGroup } = useApp();
   const { create } = useLocalSearchParams<{ create?: string }>();
   const [showCreate, setShowCreate] = useState(false);
   const [groupName, setGroupName] = useState('');
@@ -40,11 +39,6 @@ export default function GroupsScreen() {
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const groupNameInputRef = useRef<TextInput>(null);
   const skipNextFocusResetRef = useRef(false);
-
-  const getActiveItemLabel = (groupId: string) =>
-    formatActiveItemCount(
-      countActiveItems(items.filter((item) => item.groupId === groupId))
-    );
 
   const scheduleCreateInputFocus = useCallback((delayMs = 150) => {
     InteractionManager.runAfterInteractions(() => {
@@ -174,7 +168,7 @@ export default function GroupsScreen() {
           keyExtractor={(g) => g.id}
           contentContainerStyle={styles.list}
           nestedScrollEnabled
-          keyboardShouldPersistTaps={showCreate ? 'always' : 'handled'}
+          keyboardShouldPersistTaps="always"
           keyboardDismissMode={showCreate ? 'none' : 'on-drag'}
           automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
           ListHeaderComponent={listHeader}
@@ -191,23 +185,31 @@ export default function GroupsScreen() {
             const roleLabel =
               role === 'owner' ? ' · You own this' : role === 'admin' ? ' · Admin' : '';
             const expanded = expandedGroupId === group.id;
+
             return (
               <View>
-                <GroupCard
-                  name={group.name}
-                  meta={`${group.members.length} member${group.members.length !== 1 ? 's' : ''}${roleLabel} · ${getActiveItemLabel(group.id)}`}
-                  expanded={expanded}
-                  onPress={() =>
-                    setExpandedGroupId((current) =>
-                      current === group.id ? null : group.id
-                    )
-                  }
-                />
-                {expanded && (
-                  <GroupDetailContent
-                    groupId={group.id}
-                    onLeave={() => setExpandedGroupId(null)}
-                    onDelete={() => setExpandedGroupId(null)}
+                {expanded ? (
+                  <View style={styles.expandedGroup}>
+                    <GroupCard
+                      name={group.name}
+                      meta={`${group.members.length} member${group.members.length !== 1 ? 's' : ''}${roleLabel}`}
+                      expanded
+                      onPress={() => setExpandedGroupId(null)}
+                      style={styles.expandedGroupCard}
+                    />
+                    <View style={styles.expandedGroupDetail}>
+                      <GroupDetailContent
+                        groupId={group.id}
+                        onLeave={() => setExpandedGroupId(null)}
+                        onDelete={() => setExpandedGroupId(null)}
+                      />
+                    </View>
+                  </View>
+                ) : (
+                  <GroupCard
+                    name={group.name}
+                    meta={`${group.members.length} member${group.members.length !== 1 ? 's' : ''}${roleLabel}`}
+                    onPress={() => setExpandedGroupId(group.id)}
                   />
                 )}
               </View>
@@ -283,5 +285,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: layout.screenPadding,
     paddingBottom: spacing.xxl + 56,
     flexGrow: 1,
+  },
+  expandedGroup: {
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primaryLight,
+    marginBottom: layout.listGap,
+    overflow: 'hidden',
+  },
+  expandedGroupCard: {
+    marginBottom: 0,
+    borderWidth: 0,
+    shadowOpacity: 0,
+    elevation: 0,
+    backgroundColor: 'transparent',
+  },
+  expandedGroupDetail: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
   },
 });

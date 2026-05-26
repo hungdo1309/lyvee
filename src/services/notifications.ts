@@ -17,6 +17,8 @@ export { formatRecurringLabel } from '../utils/recurrence';
 /** iOS caps local notifications; schedule the nearest reminders first. */
 const MAX_SCHEDULED_NOTIFICATIONS = 58;
 const SCHEDULE_HORIZON_DAYS = 90;
+let lastReminderSyncKey = '';
+let lastReminderSyncUserId = '';
 
 export interface ReminderPayload {
   itemId: string;
@@ -203,9 +205,12 @@ export async function syncItemNotifications(
   const hasPermission = await ensureNotificationPermissions();
   if (!hasPermission) return;
 
-  try {
-    await Notifications.cancelAllScheduledNotificationsAsync();
+  if (userId !== lastReminderSyncUserId) {
+    lastReminderSyncUserId = userId;
+    lastReminderSyncKey = '';
+  }
 
+  try {
     const now = new Date();
     const eligible = getItemsForNotification(items, userId);
 
@@ -213,6 +218,20 @@ export async function syncItemNotifications(
       .flatMap((item) => buildRemindersForItem(item, now))
       .sort((a, b) => a.triggerDate.getTime() - b.triggerDate.getTime())
       .slice(0, MAX_SCHEDULED_NOTIFICATIONS);
+
+    const syncKey = allReminders
+      .map(
+        (reminder) =>
+          `${reminder.item.id}:${reminder.occurrenceDate}:${reminder.reminder}:${reminder.triggerDate.toISOString()}`
+      )
+      .join('|');
+
+    if (syncKey === lastReminderSyncKey) {
+      return;
+    }
+    lastReminderSyncKey = syncKey;
+
+    await Notifications.cancelAllScheduledNotificationsAsync();
 
     for (const reminder of allReminders) {
       await scheduleReminder(reminder);

@@ -1,40 +1,74 @@
 import React, { useState } from 'react';
-import { View, TextInput, Text, StyleSheet, TextInputProps } from 'react-native';
+import {
+  View,
+  TextInput,
+  Text,
+  StyleSheet,
+  TextInputProps,
+  Pressable,
+} from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { colors, radius, spacing, typography } from '../constants/theme';
 
 interface InputProps extends TextInputProps {
   label?: string;
   error?: string;
+  highlight?: 'success' | 'error';
 }
 
 export const Input = React.forwardRef<TextInput, InputProps>(function Input(
-  { label, error, style, onFocus, onBlur, ...props },
+  { label, error, highlight, style, onFocus, onBlur, secureTextEntry, ...props },
   ref
 ) {
   const [focused, setFocused] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const isPasswordField = secureTextEntry === true;
+
+  const handleBlur = (event: Parameters<NonNullable<TextInputProps['onBlur']>>[0]) => {
+    setFocused(false);
+    setPasswordVisible(false);
+    onBlur?.(event);
+  };
 
   return (
     <View style={styles.container}>
       {label && <Text style={styles.label}>{label}</Text>}
-      <TextInput
-        ref={ref}
-        style={[
-          styles.input,
-          focused && !error && styles.inputFocused,
-          error && styles.inputError,
-          style,
-        ]}
-        placeholderTextColor={colors.textMuted}
-        onFocus={(event) => {
-          setFocused(true);
-          onFocus?.(event);
-        }}
-        onBlur={(event) => {
-          setFocused(false);
-          onBlur?.(event);
-        }}
-        {...props}
-      />
+      <View style={styles.inputWrapper}>
+        <TextInput
+          ref={ref}
+          placeholderTextColor={colors.textMuted}
+          {...props}
+          style={[
+            styles.input,
+            isPasswordField && styles.inputWithToggle,
+            highlight === 'success' && styles.inputSuccess,
+            (highlight === 'error' || error) && styles.inputError,
+            focused && !error && !highlight && styles.inputFocused,
+            style,
+          ]}
+          secureTextEntry={isPasswordField ? !passwordVisible : false}
+          onFocus={(event) => {
+            setFocused(true);
+            onFocus?.(event);
+          }}
+          onBlur={handleBlur}
+        />
+        {isPasswordField ? (
+          <Pressable
+            style={styles.toggle}
+            onPress={() => setPasswordVisible((visible) => !visible)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={passwordVisible ? 'Hide password' : 'Show password'}
+          >
+            <Ionicons
+              name={passwordVisible ? 'eye-outline' : 'eye-off-outline'}
+              size={22}
+              color={colors.textMuted}
+            />
+          </Pressable>
+        ) : null}
+      </View>
       {error && <Text style={styles.error}>{error}</Text>}
     </View>
   );
@@ -48,6 +82,9 @@ const styles = StyleSheet.create({
     ...typography.label,
     marginBottom: spacing.sm,
   },
+  inputWrapper: {
+    position: 'relative',
+  },
   input: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -58,12 +95,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text,
   },
+  inputWithToggle: {
+    paddingRight: spacing.xxl,
+  },
   inputFocused: {
     borderColor: colors.primary,
     backgroundColor: colors.surface,
   },
+  inputSuccess: {
+    borderColor: colors.success,
+  },
   inputError: {
     borderColor: colors.error,
+  },
+  toggle: {
+    position: 'absolute',
+    right: spacing.sm,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
   },
   error: {
     fontSize: 13,

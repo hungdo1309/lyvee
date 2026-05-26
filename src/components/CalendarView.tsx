@@ -10,7 +10,7 @@ import { Item, User } from '../types';
 import { ItemCard } from './ItemCard';
 import { EmptyHint } from './EmptyState';
 import { MonthYearPicker } from './MonthYearPicker';
-import { formatAssigneeLabel } from '../utils/assignees';
+import { formatAssigneeLabel, canUserCompleteTask } from '../utils/assignees';
 
 interface CalendarViewProps {
   items: Item[];
@@ -233,7 +233,9 @@ export function CalendarView({
                 )
               }
               onToggleComplete={
-                onToggleComplete ? () => onToggleComplete(instance) : undefined
+                onToggleComplete && canUserCompleteTask(instance.item, userId)
+                  ? () => onToggleComplete(instance)
+                  : undefined
               }
               assigneeLabel={formatAssigneeLabel(instance.item.assignedTo, groupMembers)}
               groupName={groupName}

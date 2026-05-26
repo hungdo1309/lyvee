@@ -11,5 +11,5 @@ export default function AppIndex() {
     return <Redirect href={'/(app)/onboarding' as Href} />;
   }
 
-  return <Redirect href={'/(app)/(tabs)' as Href} />;
+  return <Redirect href={'/(app)/(tabs)/home' as Href} />;
 }

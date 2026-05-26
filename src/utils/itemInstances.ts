@@ -9,9 +9,10 @@ import {
   parseISO,
   isSameDay,
   isBefore,
+  isAfter,
   format,
 } from 'date-fns';
-import { Item } from '../types';
+import { Group, Item } from '../types';
 import { itemTypeConfig } from '../constants/theme';
 import {
   getOccurrencesInRange,
@@ -131,6 +132,144 @@ export function getUpcomingInstances(
     : [];
 
   return [...dated, ...undated];
+}
+
+export const HOME_UPCOMING_DAYS = 14;
+
+export function isOccurrenceDateWithinDayWindow(
+  occurrenceDate: string,
+  daysAhead: number = HOME_UPCOMING_DAYS
+): boolean {
+  const day = startOfDay(parseISO(occurrenceDate));
+  const today = startOfDay(new Date());
+  const lastDay = startOfDay(addDays(today, daysAhead - 1));
+  return !isBefore(day, today) && !isAfter(day, lastDay);
+}
+
+/** Upcoming dated instances within a calendar-day window (excludes undated items). */
+export function getUpcomingWindowInstances(
+  items: Item[],
+  daysAhead: number = HOME_UPCOMING_DAYS,
+  options: { includeExpired?: boolean } = {}
+): ItemInstance[] {
+  const { includeExpired = false } = options;
+  const today = startOfDay(new Date());
+  const rangeEnd = endOfDay(addDays(today, daysAhead - 1));
+
+  const instances = filterCalendarInstancesByStatus(
+    expandItems(
+      items.filter((item) => item.dateTime),
+      today,
+      rangeEnd
+    ),
+    includeExpired
+  );
+
+  return instances.filter(
+    (instance) =>
+      instance.occurrenceDate &&
+      isOccurrenceDateWithinDayWindow(instance.occurrenceDate, daysAhead)
+  );
+}
+
+export function getEarliestUpcomingInstance(
+  items: Item[],
+  daysAhead: number = 365
+): ItemInstance | null {
+  const instances = getUpcomingWindowInstances(items, daysAhead, {
+    includeExpired: false,
+  });
+  if (instances.length === 0) return null;
+  return sortItemListInstances(instances)[0];
+}
+
+export function getGroupIdWithEarliestUpcoming(
+  groups: Group[],
+  items: Item[]
+): string {
+  if (groups.length === 0) {
+    throw new Error('At least one group is required');
+  }
+
+  let bestGroupId = groups[0].id;
+  let bestDateKey: string | null = null;
+
+  for (const group of groups) {
+    const earliest = getEarliestUpcomingInstance(
+      items.filter((item) => item.groupId === group.id)
+    );
+    if (!earliest?.occurrenceDate) continue;
+
+    const dateKey = format(parseISO(earliest.occurrenceDate), 'yyyy-MM-dd');
+    if (
+      !bestDateKey ||
+      dateKey < bestDateKey ||
+      (dateKey === bestDateKey && group.id.localeCompare(bestGroupId) < 0)
+    ) {
+      bestDateKey = dateKey;
+      bestGroupId = group.id;
+    }
+  }
+
+  return bestGroupId;
+}
+
+export interface HomeUpcomingDaySection {
+  dateKey: string;
+  instances: ItemInstance[];
+}
+
+export function buildHomeUpcomingDaySections(
+  instances: ItemInstance[],
+  daysAhead: number = HOME_UPCOMING_DAYS
+): HomeUpcomingDaySection[] {
+  const today = startOfDay(new Date());
+  const grouped = new Map<string, ItemInstance[]>();
+
+  for (const instance of instances) {
+    if (!instance.occurrenceDate) continue;
+    const dateKey = format(parseISO(instance.occurrenceDate), 'yyyy-MM-dd');
+    const bucket = grouped.get(dateKey) ?? [];
+    bucket.push(instance);
+    grouped.set(dateKey, bucket);
+  }
+
+  return Array.from({ length: daysAhead }, (_, index) => {
+    const dateKey = format(addDays(today, index), 'yyyy-MM-dd');
+    return {
+      dateKey,
+      instances: sortItemListInstances(grouped.get(dateKey) ?? []),
+    };
+  });
+}
+
+export interface UpcomingInstanceSection {
+  dateKey: string;
+  title: string;
+  data: ItemInstance[];
+}
+
+export function groupUpcomingInstancesByDate(
+  instances: ItemInstance[],
+  formatTitle: (dateKey: string) => string
+): UpcomingInstanceSection[] {
+  const grouped = new Map<string, ItemInstance[]>();
+
+  for (const instance of instances) {
+    if (!instance.occurrenceDate) continue;
+    const dateKey = format(parseISO(instance.occurrenceDate), 'yyyy-MM-dd');
+    const bucket = grouped.get(dateKey) ?? [];
+    bucket.push(instance);
+    grouped.set(dateKey, bucket);
+  }
+
+  return [...grouped.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([dateKey, data]) => ({
+      dateKey,
+      title: formatTitle(dateKey),
+      data: sortItemListInstances(data),
+    }));
 }
 
 function sortItemListInstances(instances: ItemInstance[]): ItemInstance[] {
@@ -263,7 +402,7 @@ export function getGroupItemListSections(
   if (includeExpired && expired.length > 0) {
     sections.push({
       key: 'expired',
-      title: 'Expired',
+      title: 'Completed',
       data: sortItemListInstances(expired),
     });
   }

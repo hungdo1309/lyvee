@@ -14,28 +14,47 @@ import { useAuth } from '../../src/context/AuthContext';
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { PasswordStrengthIndicator } from '../../src/components/PasswordStrengthIndicator';
+import { PasswordRequirementsChecklist } from '../../src/components/PasswordRequirementsChecklist';
+import { PasswordChecklist } from '../../src/components/PasswordChecklist';
 import { colors, spacing, typography } from '../../src/constants/theme';
 import { isFirebaseConfigured } from '../../src/config/firebase';
-import { validatePassword } from '../../src/utils/passwordValidation';
+import {
+  getPasswordMatchRequirement,
+  validatePassword,
+} from '../../src/utils/passwordValidation';
 
 export default function SignUpScreen() {
   const { register } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPasswordRequirements, setShowPasswordRequirements] = useState(false);
+  const [showConfirmChecks, setShowConfirmChecks] = useState(false);
+  const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{
     name?: string;
     email?: string;
     password?: string;
+    confirmPassword?: string;
   }>({});
 
   const passwordValidation = useMemo(() => validatePassword(password), [password]);
+  const passwordsMatch =
+    confirmPassword.length > 0 && confirmPassword === password;
+
+  const confirmPasswordHighlight = passwordsMatch
+    ? 'success'
+    : confirmPasswordFocused
+      ? 'error'
+      : undefined;
 
   const canSubmit =
     name.trim().length > 0 &&
     email.trim().length > 0 &&
-    passwordValidation.isValid;
+    passwordValidation.isValid &&
+    passwordsMatch;
 
   const validate = () => {
     const next: typeof errors = {};
@@ -43,6 +62,11 @@ export default function SignUpScreen() {
     if (!email.trim()) next.email = 'Email is required';
     if (!passwordValidation.isValid) {
       next.password = passwordValidation.errors[0];
+    }
+    if (!confirmPassword) {
+      next.confirmPassword = 'Confirm your password';
+    } else if (confirmPassword !== password) {
+      next.confirmPassword = 'Passwords do not match';
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -111,20 +135,40 @@ export default function SignUpScreen() {
                 label="Password"
                 value={password}
                 onChangeText={setPassword}
-                placeholder="8+ chars with letter, number & symbol"
+                placeholder="Create your password"
                 secureTextEntry
                 autoComplete="new-password"
+                onFocus={() => setShowPasswordRequirements(true)}
+                error={errors.password}
               />
-              <PasswordStrengthIndicator password={password} />
-              {password.length > 0 && passwordValidation.errors.length > 0 && (
-                <View style={styles.passwordErrors}>
-                  {passwordValidation.errors.map((message) => (
-                    <Text key={message} style={styles.passwordError}>
-                      {message}
-                    </Text>
-                  ))}
-                </View>
-              )}
+              <PasswordRequirementsChecklist
+                password={password}
+                visible={showPasswordRequirements}
+              />
+              {password.length > 0 ? (
+                <PasswordStrengthIndicator password={password} />
+              ) : null}
+            </View>
+            <View style={styles.confirmField}>
+              <Input
+                label="Confirm password"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                placeholder="Confirm your password"
+                secureTextEntry
+                autoComplete="new-password"
+                onFocus={() => {
+                  setConfirmPasswordFocused(true);
+                  setShowConfirmChecks(true);
+                }}
+                onBlur={() => setConfirmPasswordFocused(false)}
+                highlight={confirmPasswordHighlight}
+                error={errors.confirmPassword}
+              />
+              <PasswordChecklist
+                visible={showConfirmChecks}
+                items={[getPasswordMatchRequirement(password, confirmPassword)]}
+              />
             </View>
             <Button
               title="Create Account"
@@ -139,7 +183,7 @@ export default function SignUpScreen() {
           <View style={styles.footer}>
             <Text style={styles.footerText}>Already have an account? </Text>
             <Link href="/(auth)/login" style={styles.link}>
-              Sign in
+              Sign In
             </Link>
           </View>
         </ScrollView>
@@ -179,15 +223,8 @@ const styles = StyleSheet.create({
   passwordField: {
     marginTop: 0,
   },
-  passwordErrors: {
-    marginTop: -spacing.sm,
-    marginBottom: spacing.md,
-    gap: 4,
-  },
-  passwordError: {
-    fontSize: 13,
-    color: colors.error,
-    lineHeight: 18,
+  confirmField: {
+    marginTop: 0,
   },
   button: {
     marginTop: spacing.sm,

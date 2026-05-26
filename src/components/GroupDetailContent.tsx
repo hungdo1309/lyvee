@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,15 +12,10 @@ import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { Button } from './Button';
 import { Input } from './Input';
+import { GroupAllItemsLink } from './GroupAllItemsLink';
 import { GroupMemberRow } from './GroupMemberRow';
 import { useGroupMembers } from '../hooks/useGroupMembers';
 import {
-  countActiveItems,
-  countExpiredItems,
-  formatGroupItemCounts,
-} from '../utils/itemInstances';
-import {
-  subscribeToGroup,
   buildInviteMessage,
   regenerateInviteCode,
   removeMember,
@@ -36,7 +31,6 @@ import {
 } from '../services/groups';
 import {
   getMemberActions,
-  getMemberRole,
   MemberAction,
   sortMembersByRole,
 } from '../utils/groupRoles';
@@ -55,25 +49,22 @@ export function GroupDetailContent({
   onDelete,
 }: GroupDetailContentProps) {
   const { user } = useAuth();
-  const { items } = useApp();
-  const [group, setGroup] = useState<Group | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { groups, loading: appLoading } = useApp();
+  const inviteEnsuredRef = useRef<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [renaming, setRenaming] = useState(false);
 
+  const group = useMemo(
+    () => groups.find((entry) => entry.id === groupId) ?? null,
+    [groups, groupId]
+  );
+
   useEffect(() => {
-    if (!groupId) return;
-    setLoading(true);
-    const unsubscribe = subscribeToGroup(groupId, (fetched) => {
-      setGroup(fetched);
-      setLoading(false);
-      if (fetched && user) {
-        ensureGroupInvite(fetched).catch(() => {});
-      }
-    });
-    return unsubscribe;
-  }, [groupId, user]);
+    if (!group || !user || inviteEnsuredRef.current === group.id) return;
+    inviteEnsuredRef.current = group.id;
+    ensureGroupInvite(group).catch(() => {});
+  }, [group, user]);
 
   useEffect(() => {
     if (group) {
@@ -86,19 +77,8 @@ export function GroupDetailContent({
     () => (group ? sortMembersByRole(group, members) : members),
     [group, members]
   );
-  const groupItems = useMemo(
-    () => items.filter((item) => item.groupId === groupId),
-    [items, groupId]
-  );
-  const activeItemCount = useMemo(
-    () => countActiveItems(groupItems),
-    [groupItems]
-  );
-  const expiredItemCount = useMemo(
-    () => countExpiredItems(groupItems),
-    [groupItems]
-  );
-  const itemCountLabel = formatGroupItemCounts(activeItemCount, expiredItemCount);
+
+  const loading = appLoading;
 
   if (loading) {
     return (
@@ -286,30 +266,30 @@ export function GroupDetailContent({
 
   return (
     <View style={styles.container}>
-      {manager ? (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Group name</Text>
-          <Input
-            value={nameDraft}
-            onChangeText={setNameDraft}
-            placeholder="e.g. Home, Family, Roommates"
-            autoCapitalize="words"
-          />
-          <Button
-            title="Save name"
-            onPress={handleSaveName}
-            loading={renaming}
-            disabled={
-              renaming || !nameDraft.trim() || nameDraft.trim() === group.name
-            }
-          />
-        </View>
-      ) : (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Group name</Text>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Group name</Text>
+        {manager ? (
+          <>
+            <Input
+              value={nameDraft}
+              onChangeText={setNameDraft}
+              placeholder="e.g. Home, Family, Roommates"
+              autoCapitalize="words"
+            />
+            <Button
+              title="Save name"
+              onPress={handleSaveName}
+              loading={renaming}
+              disabled={
+                renaming || !nameDraft.trim() || nameDraft.trim() === group.name
+              }
+            />
+          </>
+        ) : (
           <Text style={styles.groupNameReadOnly}>{group.name}</Text>
-        </View>
-      )}
+        )}
+        <GroupAllItemsLink groupId={groupId} variant="inline" />
+      </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Members ({memberCount})</Text>
@@ -372,11 +352,6 @@ export function GroupDetailContent({
         )}
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Items</Text>
-        <Text style={styles.countText}>{itemCountLabel}</Text>
-      </View>
-
       {owner ? (
         <View style={styles.ownerActions}>
           <Text style={styles.ownerDeleteHint}>
@@ -427,11 +402,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: spacing.md,
-  },
-  countText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.text,
   },
   groupNameReadOnly: {
     fontSize: 18,

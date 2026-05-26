@@ -16,6 +16,7 @@ export async function notifyGroupMemberJoined(
   await enqueuePushEvent({
     type: 'group.member_joined',
     actorId: joinerId,
+    actorName: name,
     recipientIds: getOtherGroupManagers(group, joinerId),
     title: group.name,
     body: `${name} joined your group.`,
@@ -31,6 +32,7 @@ export async function notifyGroupMemberLeft(
   await enqueuePushEvent({
     type: 'group.member_left',
     actorId: memberId,
+    actorName: name,
     recipientIds: getOtherGroupManagers(group, memberId),
     title: group.name,
     body: `${name} left the group.`,
@@ -47,6 +49,7 @@ export async function notifyGroupMemberRemoved(
   await enqueuePushEvent({
     type: 'group.member_removed',
     actorId,
+    actorName: name,
     recipientIds: [removedMemberId],
     title: group.name,
     body: `${name} removed you from the group.`,
@@ -63,6 +66,7 @@ export async function notifyGroupRolePromoted(
   await enqueuePushEvent({
     type: 'group.role_promoted',
     actorId,
+    actorName: name,
     recipientIds: [memberId],
     title: group.name,
     body: `${name} made you an admin.`,
@@ -79,6 +83,7 @@ export async function notifyGroupRoleDemoted(
   await enqueuePushEvent({
     type: 'group.role_demoted',
     actorId,
+    actorName: name,
     recipientIds: [memberId],
     title: group.name,
     body: `${name} changed your role to member.`,
@@ -96,6 +101,7 @@ export async function notifyGroupOwnershipTransferred(
     await enqueuePushEvent({
       type: 'group.ownership_transferred',
       actorId,
+      actorName: name,
       recipientIds: [newOwnerId],
       title: group.name,
       body: `${name} made you the group owner.`,
@@ -113,6 +119,7 @@ export async function notifyGroupRenamed(
   await enqueuePushEvent({
     type: 'group.renamed',
     actorId,
+    actorName: name,
     recipientIds: getOtherGroupMembers(group, actorId),
     title: 'Group renamed',
     body: `${name} renamed "${previousName}" to "${group.name}".`,
@@ -128,6 +135,7 @@ export async function notifyGroupDeleted(
   await enqueuePushEvent({
     type: 'group.deleted',
     actorId,
+    actorName: name,
     recipientIds: getOtherGroupMembers(group, actorId),
     title: 'Group deleted',
     body: `${name} deleted "${group.name}".`,

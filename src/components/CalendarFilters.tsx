@@ -5,11 +5,18 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
-import { User } from '../types';
-import { CalendarFilters, DEFAULT_CALENDAR_FILTERS, hasActiveCalendarFilters } from '../utils/itemFilters';
-import { formatTagLabel, getTagStyle } from '../utils/tags';
-import { colors, radius, spacing } from '../constants/theme';
+import { ItemType, User } from '../types';
+import {
+  CalendarFilters,
+  DEFAULT_CALENDAR_FILTERS,
+  hasActiveCalendarFilters,
+  ItemTypeFilter,
+} from '../utils/itemFilters';
+import { colors, itemTypeConfig, radius, spacing } from '../constants/theme';
 import { HorizontalChipRow } from './HorizontalChipRow';
+import { TagFilterBar } from './TagFilterBar';
+
+const TYPE_FILTERS: ItemTypeFilter[] = ['all', 'task', 'activity', 'document'];
 
 interface CalendarFiltersBarProps {
   members: User[];
@@ -17,7 +24,6 @@ interface CalendarFiltersBarProps {
   filters: CalendarFilters;
   onChange: (filters: CalendarFilters) => void;
   availableTags?: string[];
-  expiredCount?: number;
 }
 
 interface FilterChipProps {
@@ -26,6 +32,11 @@ interface FilterChipProps {
   onPress: () => void;
   selectedColor?: string;
   selectedBackground?: string;
+}
+
+function getTypeFilterColor(filter: ItemTypeFilter): string {
+  if (filter === 'all') return colors.primary;
+  return itemTypeConfig[filter].color;
 }
 
 function FilterChip({
@@ -64,7 +75,6 @@ export function CalendarFiltersBar({
   filters,
   onChange,
   availableTags = [],
-  expiredCount = 0,
 }: CalendarFiltersBarProps) {
   const showClear = hasActiveCalendarFilters(filters);
 
@@ -72,13 +82,6 @@ export function CalendarFiltersBar({
     () => (currentUserId ? members.filter((m) => m.id !== currentUserId) : members),
     [members, currentUserId]
   );
-
-  const toggleTag = (tag: string) => {
-    const tags = filters.tags.includes(tag)
-      ? filters.tags.filter((t) => t !== tag)
-      : [...filters.tags, tag];
-    onChange({ ...filters, tags });
-  };
 
   return (
     <View style={styles.container}>
@@ -93,6 +96,27 @@ export function CalendarFiltersBar({
           </TouchableOpacity>
         )}
       </View>
+
+      <Text style={styles.label}>Type</Text>
+      <HorizontalChipRow style={styles.chipRow}>
+        {TYPE_FILTERS.map((typeFilter) => {
+          const selected = filters.type === typeFilter;
+          const typeColor = getTypeFilterColor(typeFilter);
+          const label =
+            typeFilter === 'all' ? 'All' : itemTypeConfig[typeFilter as ItemType].label;
+
+          return (
+            <FilterChip
+              key={typeFilter}
+              label={label}
+              selected={selected}
+              onPress={() => onChange({ ...filters, type: typeFilter })}
+              selectedColor={typeColor}
+              selectedBackground={typeColor + '20'}
+            />
+          );
+        })}
+      </HorizontalChipRow>
 
       <Text style={styles.label}>Visibility</Text>
       <HorizontalChipRow style={styles.chipRow}>
@@ -143,13 +167,7 @@ export function CalendarFiltersBar({
       <Text style={styles.label}>Status</Text>
       <HorizontalChipRow style={styles.chipRow}>
         <FilterChip
-          label={
-            filters.showExpired
-              ? 'Includes Expired'
-              : expiredCount > 0
-                ? `Includes Expired · ${expiredCount}`
-                : 'Includes Expired'
-          }
+          label="Includes Completed"
           selected={filters.showExpired}
           onPress={() => onChange({ ...filters, showExpired: !filters.showExpired })}
           selectedColor={colors.textSecondary}
@@ -158,25 +176,11 @@ export function CalendarFiltersBar({
       </HorizontalChipRow>
 
       {availableTags.length > 0 && (
-        <>
-          <Text style={styles.label}>Tags</Text>
-          <HorizontalChipRow style={styles.chipRow}>
-            {availableTags.map((tag) => {
-              const selected = filters.tags.includes(tag);
-              const tagStyle = getTagStyle(tag);
-              return (
-                <FilterChip
-                  key={tag}
-                  label={formatTagLabel(tag)}
-                  selected={selected}
-                  onPress={() => toggleTag(tag)}
-                  selectedColor={tagStyle.color}
-                  selectedBackground={tagStyle.backgroundColor}
-                />
-              );
-            })}
-          </HorizontalChipRow>
-        </>
+        <TagFilterBar
+          availableTags={availableTags}
+          selectedTags={filters.tags}
+          onChange={(tags) => onChange({ ...filters, tags })}
+        />
       )}
     </View>
   );

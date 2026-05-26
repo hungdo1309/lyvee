@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import Constants from 'expo-constants';
 import { appAlert } from '../../../src/utils/dialog';
 import { router, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,9 +10,14 @@ import { Card } from '../../../src/components/Card';
 import { InfoRow, SectionCard } from '../../../src/components/SectionCard';
 import { colors, layout, radius, spacing, typography } from '../../../src/constants/theme';
 import { getNameInitials } from '../../../src/utils/names';
+import { formatMemberSince } from '../../../src/utils/dates';
 
 export default function SettingsScreen() {
-  const { user, logout } = useAuth();
+  const { user, firebaseUser, logout } = useAuth();
+  const appVersion = Constants.expoConfig?.version ?? '1.2.0';
+  const memberSince = formatMemberSince(
+    user?.createdAt ?? firebaseUser?.metadata.creationTime ?? ''
+  );
 
   const handleLogout = () => {
     appAlert('Sign out', 'Are you sure you want to sign out?', [
@@ -39,9 +45,26 @@ export default function SettingsScreen() {
           <View>
             <Text style={styles.name}>{user?.name}</Text>
             <Text style={styles.email}>{user?.email}</Text>
+            {memberSince ? (
+              <Text style={styles.memberSince}>{memberSince}</Text>
+            ) : null}
           </View>
         </View>
       </Card>
+
+      <SectionCard title="Account">
+        <Button
+          title="Change Email"
+          variant="secondary"
+          onPress={() => router.push('/(app)/change-email' as Href)}
+          style={styles.accountButton}
+        />
+        <Button
+          title="Change Password"
+          variant="secondary"
+          onPress={() => router.push('/(app)/change-password' as Href)}
+        />
+      </SectionCard>
 
       <SectionCard title="Support">
         <Button
@@ -52,11 +75,11 @@ export default function SettingsScreen() {
       </SectionCard>
 
       <SectionCard title="About">
-        <InfoRow label="App" value="Lyvee v1.0.0" />
+        <InfoRow label="App" value={`Lyvee v${appVersion}`} />
       </SectionCard>
 
       <View style={styles.footer}>
-        <Button title="Sign Out" variant="danger" onPress={handleLogout} />
+        <Button title="Sign out" variant="cancel" onPress={handleLogout} />
       </View>
     </SafeAreaView>
   );
@@ -100,6 +123,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     marginTop: spacing.sm / 2,
+  },
+  memberSince: {
+    fontSize: 13,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+  },
+  accountButton: {
+    marginBottom: spacing.sm,
   },
   footer: {
     marginTop: 'auto',

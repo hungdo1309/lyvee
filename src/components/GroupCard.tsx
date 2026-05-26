@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Card } from './Card';
 import { colors, radius, spacing } from '../constants/theme';
 
@@ -8,9 +9,9 @@ interface GroupCardProps {
   meta: string;
   onPress: () => void;
   expanded?: boolean;
-  active?: boolean;
   selected?: boolean;
   selectionMode?: boolean;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function GroupCard({
@@ -18,14 +19,20 @@ export function GroupCard({
   meta,
   onPress,
   expanded = false,
-  active = false,
   selected = false,
   selectionMode = false,
+  style,
 }: GroupCardProps) {
-  const variant = selected || active || expanded ? 'selected' : 'default';
+  const variant = expanded || selected ? 'selected' : 'default';
 
   return (
-    <Card variant={variant} onPress={onPress}>
+    <Card
+      variant={variant}
+      onPress={onPress}
+      style={style}
+      accessibilityRole="button"
+      accessibilityState={{ expanded, selected: selectionMode ? selected : expanded }}
+    >
       <View style={styles.row}>
         {selectionMode && (
           <View style={[styles.radio, selected && styles.radioSelected]}>
@@ -33,15 +40,16 @@ export function GroupCard({
           </View>
         )}
         <View style={styles.info}>
-          <Text style={styles.name}>{name}</Text>
+          <Text style={[styles.name, expanded && styles.nameExpanded]}>{name}</Text>
           <Text style={styles.meta}>{meta}</Text>
         </View>
         {!selectionMode && (
-          <Text style={styles.chevron}>{expanded ? '▾' : '▸'}</Text>
-        )}
-        {active && !selectionMode && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>Active</Text>
+          <View style={[styles.chevronWrap, expanded && styles.chevronWrapExpanded]}>
+            <Ionicons
+              name={expanded ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color={expanded ? colors.primary : colors.textSecondary}
+            />
           </View>
         )}
       </View>
@@ -82,28 +90,25 @@ const styles = StyleSheet.create({
     color: colors.text,
     letterSpacing: -0.2,
   },
+  nameExpanded: {
+    color: colors.primaryDark,
+  },
   meta: {
     fontSize: 14,
     color: colors.textSecondary,
     marginTop: spacing.sm / 2,
     lineHeight: 20,
   },
-  chevron: {
-    fontSize: 16,
-    color: colors.textMuted,
-    marginLeft: spacing.sm,
-  },
-  badge: {
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm / 2,
+  chevronWrap: {
+    width: 32,
+    height: 32,
     borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.sm,
+    backgroundColor: colors.iconBg,
   },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.primary,
+  chevronWrapExpanded: {
+    backgroundColor: colors.primaryLight,
   },
 });

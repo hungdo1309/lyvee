@@ -1,4 +1,9 @@
-import { User } from '../types';
+import { Item, User } from '../types';
+
+export function canUserCompleteTask(item: Item, userId: string | undefined): boolean {
+  if (!userId || item.type !== 'task') return false;
+  return item.assignedTo.includes(userId);
+}
 
 export function getAssigneeNames(assignedTo: string[], members: User[]): string[] {
   return assignedTo

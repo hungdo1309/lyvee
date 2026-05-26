@@ -102,6 +102,7 @@ export default function LoginScreen() {
               title="Sign In"
               onPress={handleLogin}
               loading={loading}
+              disabled={password.length === 0}
               size="lg"
               style={styles.button}
             />
@@ -110,7 +111,7 @@ export default function LoginScreen() {
           <View style={styles.footer}>
             <Text style={styles.footerText}>Don't have an account? </Text>
             <Link href="/(auth)/signup" style={styles.link}>
-              Sign up
+              Sign Up
             </Link>
           </View>
         </ScrollView>

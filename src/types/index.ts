@@ -89,6 +89,8 @@ export interface Item {
   recurringRule: RecurringRule;
   visibility: ItemVisibility;
   allowedMembers: string[];
+  /** Indexed list of member IDs who can read this item in Firestore. */
+  visibleTo?: string[];
   assignedTo: string[];
   notes: string;
   tags: string[];
@@ -121,17 +123,31 @@ export interface Feedback {
   createdAt: string;
 }
 
-export const FEEDBACK_SCREENS = [
-  'Calendar',
-  'Items',
-  'Groups',
-  'Settings',
-  'Onboarding',
-  'Create Item',
-  'Edit Item',
-  'Group Detail',
-  'Select Group',
-  'Other',
+export const FEEDBACK_SCREEN_CATEGORIES = [
+  {
+    title: 'Main tabs',
+    screens: ['Home', 'Calendar', 'Groups', 'All Items', 'Settings'],
+  },
+  {
+    title: 'Items',
+    screens: ['Create Item', 'Edit Item'],
+  },
+  {
+    title: 'Groups',
+    screens: ['Group Detail', 'Select Group'],
+  },
+  {
+    title: 'Getting started',
+    screens: ['Onboarding'],
+  },
+  {
+    title: 'General',
+    screens: ['Other'],
+  },
 ] as const;
 
-export type FeedbackScreen = (typeof FEEDBACK_SCREENS)[number];
+export const FEEDBACK_SCREENS = FEEDBACK_SCREEN_CATEGORIES.flatMap(
+  (category) => category.screens
+);
+
+export type FeedbackScreen = (typeof FEEDBACK_SCREEN_CATEGORIES)[number]['screens'][number];

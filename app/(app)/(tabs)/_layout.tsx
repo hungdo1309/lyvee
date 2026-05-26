@@ -27,6 +27,7 @@ export default function TabsLayout() {
 
   return (
     <MaterialTopTabs
+      initialRouteName="home"
       tabBar={(props) => <TopTabBar {...props} />}
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
@@ -43,17 +44,17 @@ export default function TabsLayout() {
       }}
     >
       <MaterialTopTabs.Screen
+        name="home"
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ color }) => <TabIcon icon="🏠" activeColor={color} />,
+        }}
+      />
+      <MaterialTopTabs.Screen
         name="index"
         options={{
           title: 'Calendar',
           tabBarIcon: ({ color }) => <TabIcon icon="📅" activeColor={color} />,
-        }}
-      />
-      <MaterialTopTabs.Screen
-        name="items"
-        options={{
-          title: 'Items',
-          tabBarIcon: ({ color }) => <TabIcon icon="📋" activeColor={color} />,
         }}
       />
       <MaterialTopTabs.Screen

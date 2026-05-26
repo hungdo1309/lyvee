@@ -22,7 +22,6 @@ export function HeaderSaveButton({
       onPress={onPress}
       loading={loading}
       disabled={disabled}
-      accessibilityLabel={label}
     />
   );
 }
