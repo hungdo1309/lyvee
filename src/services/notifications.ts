@@ -70,6 +70,11 @@ export async function ensureNotificationPermissions(): Promise<boolean> {
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
       });
+      await Notifications.setNotificationChannelAsync('activity', {
+        name: 'Lyvee Activity',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+      });
     }
 
     return true;

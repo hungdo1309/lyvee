@@ -10,7 +10,6 @@ import { Item, User } from '../types';
 import { ItemCard } from './ItemCard';
 import { EmptyHint } from './EmptyState';
 import { MonthYearPicker } from './MonthYearPicker';
-import { SwipeableView } from './SwipeableView';
 import { formatAssigneeLabel } from '../utils/assignees';
 
 interface CalendarViewProps {
@@ -23,6 +22,8 @@ interface CalendarViewProps {
   userId?: string;
   visibleMonth?: string;
   onVisibleMonthChange?: (month: string) => void;
+  selectedDate?: string;
+  onSelectedDateChange?: (date: string) => void;
   includeExpired?: boolean;
 }
 
@@ -51,10 +52,13 @@ export function CalendarView({
   userId,
   visibleMonth: visibleMonthProp,
   onVisibleMonthChange,
+  selectedDate: selectedDateProp,
+  onSelectedDateChange,
   includeExpired = false,
 }: CalendarViewProps) {
   const today = format(new Date(), 'yyyy-MM-dd');
-  const [selectedDate, setSelectedDate] = useState(today);
+  const [internalSelectedDate, setInternalSelectedDate] = useState(today);
+  const selectedDate = selectedDateProp ?? internalSelectedDate;
   const [internalVisibleMonth, setInternalVisibleMonth] = useState(today);
   const [expandedInstanceKey, setExpandedInstanceKey] = useState<string | null>(null);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
@@ -94,6 +98,14 @@ export function CalendarView({
     },
   };
 
+  const setSelectedDate = (date: string) => {
+    if (onSelectedDateChange) {
+      onSelectedDateChange(date);
+    } else {
+      setInternalSelectedDate(date);
+    }
+  };
+
   const handleDayPress = (day: DateData) => {
     setSelectedDate(day.dateString);
     setExpandedInstanceKey(null);
@@ -123,11 +135,7 @@ export function CalendarView({
   return (
     <View style={styles.container}>
       <View style={styles.calendarCard}>
-        <SwipeableView
-          style={styles.monthNav}
-          onSwipeLeft={() => shiftMonth(1)}
-          onSwipeRight={() => shiftMonth(-1)}
-        >
+        <View style={styles.monthNav}>
           <TouchableOpacity
             style={styles.monthNavButton}
             onPress={() => shiftMonth(-1)}
@@ -155,7 +163,7 @@ export function CalendarView({
           >
             <Ionicons name="chevron-forward" size={22} color={colors.primary} />
           </TouchableOpacity>
-        </SwipeableView>
+        </View>
 
         <Calendar
           key={visibleMonth}
@@ -164,7 +172,7 @@ export function CalendarView({
           onMonthChange={handleMonthChange}
           markedDates={allMarked}
           markingType="multi-dot"
-          enableSwipeMonths
+          enableSwipeMonths={false}
           hideExtraDays={false}
           hideArrows
           headerStyle={styles.hiddenCalendarHeader}

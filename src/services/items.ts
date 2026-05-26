@@ -18,6 +18,12 @@ import { toOccurrenceKey } from '../utils/recurrence';
 import { normalizeTags } from '../utils/tags';
 import { filterVisibleItems, isItemVisibleToMember } from '../utils/itemVisibility';
 import { normalizeReminderOffset } from '../utils/reminders';
+import {
+  notifyItemCompleted,
+  notifyItemCreated,
+  notifyItemDeleted,
+  notifyItemUpdated,
+} from './itemNotifications';
 
 export { filterVisibleItems, isItemVisibleToMember };
 
@@ -76,13 +82,17 @@ export async function createItem(
     updatedAt: now,
   };
   await setDoc(doc(db, 'items', id), item);
+  await notifyItemCreated(item, userId);
   return item;
 }
 
 export async function updateItem(
   itemId: string,
-  updates: Partial<ItemInput>
+  updates: Partial<ItemInput>,
+  actorId?: string,
+  sendPush = true
 ): Promise<void> {
+  const existing = actorId ? await getItem(itemId) : null;
   const payload: Record<string, unknown> = {
     ...updates,
     updatedAt: new Date().toISOString(),
@@ -100,10 +110,18 @@ export async function updateItem(
     payload.reminderOffset = 'none';
   }
   await setDoc(doc(db, 'items', itemId), payload, { merge: true });
+
+  if (actorId && existing && sendPush) {
+    await notifyItemUpdated(existing, updates, actorId);
+  }
 }
 
-export async function deleteItem(itemId: string): Promise<void> {
+export async function deleteItem(itemId: string, actorId?: string): Promise<void> {
+  const existing = actorId ? await getItem(itemId) : null;
   await deleteDoc(doc(db, 'items', itemId));
+  if (actorId && existing) {
+    await notifyItemDeleted(existing, actorId);
+  }
 }
 
 export async function deleteItemsForGroup(groupId: string): Promise<void> {
@@ -142,22 +160,31 @@ export function subscribeToItem(
 /** Toggle completion for a single or recurring task occurrence. */
 export async function toggleItemComplete(
   item: Item,
-  occurrenceDate?: string
+  occurrenceDate?: string,
+  actorId?: string
 ): Promise<void> {
   if (item.type !== 'task') return;
 
   if (item.recurringRule.frequency === 'none' || !occurrenceDate) {
-    await updateItem(item.id, { completed: !item.completed });
+    const completed = !item.completed;
+    await updateItem(item.id, { completed }, actorId, false);
+    if (actorId && completed) {
+      await notifyItemCompleted(item, actorId);
+    }
     return;
   }
 
   const key = toOccurrenceKey(occurrenceDate);
   const current = item.completedOccurrences ?? [];
-  const completedOccurrences = current.includes(key)
-    ? current.filter((k) => k !== key)
-    : [...current, key];
+  const isCompleting = !current.includes(key);
+  const completedOccurrences = isCompleting
+    ? [...current, key]
+    : current.filter((k) => k !== key);
 
-  await updateItem(item.id, { completedOccurrences });
+  await updateItem(item.id, { completedOccurrences }, actorId, false);
+  if (actorId && isCompleting) {
+    await notifyItemCompleted(item, actorId, occurrenceDate);
+  }
 }
 
 export function subscribeToGroupItems(

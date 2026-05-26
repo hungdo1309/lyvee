@@ -1,16 +1,35 @@
 import { useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { ReminderPayload } from '../services/notifications';
+import { PushNotificationData } from '../types/pushNotifications';
 
-function navigateToItem(data: ReminderPayload) {
+function navigateToItem(itemId: string, occurrence?: string) {
   router.push({
     pathname: '/(app)/item/[id]',
     params: {
-      id: data.itemId,
-      occurrence: data.occurrence,
+      id: itemId,
+      ...(occurrence ? { occurrence } : {}),
     },
   });
+}
+
+function navigateToGroup(groupId: string) {
+  router.push({
+    pathname: '/(app)/(tabs)/groups/[id]',
+    params: { id: groupId },
+  } as Href);
+}
+
+function openFromPushData(data: Partial<ReminderPayload & PushNotificationData>) {
+  if (data.itemId) {
+    navigateToItem(data.itemId, data.occurrence);
+    return;
+  }
+
+  if (data.groupId && data.type?.startsWith('group.')) {
+    navigateToGroup(data.groupId);
+  }
 }
 
 export function NotificationHandler() {
@@ -19,15 +38,11 @@ export function NotificationHandler() {
       response: Notifications.NotificationResponse | null
     ) => {
       if (!response) return;
-      const data = response.notification.request.content.data as Partial<ReminderPayload>;
-      if (data?.itemId) {
-        navigateToItem({
-          itemId: data.itemId,
-          groupId: data.groupId ?? '',
-          occurrence: data.occurrence ?? '',
-          reminder: data.reminder ?? '1h',
-        });
-      }
+      openFromPushData(
+        response.notification.request.content.data as Partial<
+          ReminderPayload & PushNotificationData
+        >
+      );
     };
 
     Notifications.getLastNotificationResponseAsync().then(openFromResponse);

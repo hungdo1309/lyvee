@@ -10,7 +10,7 @@ import { colors, layout, radius, spacing } from '../constants/theme';
 
 interface ButtonProps extends TouchableOpacityProps {
   title: string;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'cancel';
   loading?: boolean;
   size?: 'sm' | 'md' | 'lg';
 }
@@ -41,7 +41,11 @@ export function Button({
     >
       {loading ? (
         <ActivityIndicator
-          color={variant === 'primary' ? colors.onPrimary : colors.primary}
+          color={
+            variant === 'primary' || variant === 'cancel'
+              ? colors.onPrimary
+              : colors.primary
+          }
         />
       ) : (
         <Text style={[styles.text, styles[`text_${variant}`]]}>{title}</Text>
@@ -67,6 +71,9 @@ const styles = StyleSheet.create({
   },
   danger: {
     backgroundColor: '#FEE2E2',
+  },
+  cancel: {
+    backgroundColor: colors.error,
   },
   size_sm: {
     paddingVertical: spacing.sm,
@@ -99,5 +106,8 @@ const styles = StyleSheet.create({
   },
   text_danger: {
     color: colors.error,
+  },
+  text_cancel: {
+    color: colors.onPrimary,
   },
 });

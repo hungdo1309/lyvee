@@ -5,7 +5,7 @@ import {
   onAuthStateChanged,
   User as FirebaseUser,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { User } from '../types';
 
@@ -104,9 +104,16 @@ export async function getUsersByIds(userIds: string[]): Promise<User[]> {
 
 export async function updateUserProfile(
   userId: string,
-  updates: Partial<Pick<User, 'name' | 'pushToken'>>
+  updates: Partial<Pick<User, 'name' | 'pushToken' | 'pushTokens'>>
 ): Promise<void> {
   await setDoc(doc(db, 'users', userId), updates, { merge: true });
+}
+
+export async function registerPushToken(userId: string, token: string): Promise<void> {
+  await updateDoc(doc(db, 'users', userId), {
+    pushToken: token,
+    pushTokens: arrayUnion(token),
+  });
 }
 
 export function subscribeToAuth(

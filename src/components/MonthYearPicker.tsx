@@ -8,6 +8,8 @@ import {
   Pressable,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { CancelButton } from './CancelButton';
+import { Button } from './Button';
 import { colors, layout, radius, spacing } from '../constants/theme';
 
 const MONTHS = [
@@ -103,12 +105,13 @@ export function MonthYearPicker({
           </View>
 
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
-              <Text style={styles.confirmButtonText}>Go</Text>
-            </TouchableOpacity>
+            <CancelButton onPress={onClose} style={styles.actionButton} />
+            <Button
+              title="Go"
+              variant="primary"
+              onPress={handleConfirm}
+              style={styles.actionButton}
+            />
           </View>
         </Pressable>
       </Pressable>
@@ -184,29 +187,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
-  cancelButton: {
+  actionButton: {
     flex: 1,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  confirmButton: {
-    flex: 1,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-  },
-  confirmButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.onPrimary,
   },
 });

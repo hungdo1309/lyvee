@@ -48,10 +48,16 @@ export function KeyboardAwareScrollView({
   const offset =
     keyboardVerticalOffset ?? (Platform.OS === 'ios' ? headerHeight : 0);
 
+  const keyboardPadding =
+    keyboardHeight > 0 && Platform.OS === 'ios'
+      ? { paddingBottom: keyboardHeight + spacing.lg }
+      : null;
+
   return (
     <KeyboardAvoidingView
       style={[styles.flex, containerStyle, style]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      enabled={Platform.OS === 'ios'}
       keyboardVerticalOffset={offset}
     >
       <ScrollView
@@ -60,7 +66,7 @@ export function KeyboardAwareScrollView({
         contentContainerStyle={[
           styles.content,
           contentContainerStyle,
-          keyboardHeight > 0 && { paddingBottom: keyboardHeight + spacing.lg },
+          keyboardPadding,
         ]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}

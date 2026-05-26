@@ -6,8 +6,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
 } from 'react-native';
+import { appAlert } from '../../src/utils/dialog';
 import { Link, router, useLocalSearchParams, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/context/AuthContext';
@@ -40,7 +40,7 @@ export default function LoginScreen() {
     if (!validate()) return;
 
     if (!isFirebaseConfigured()) {
-      Alert.alert(
+      appAlert(
         'Firebase not configured',
         'Copy .env.example to .env and add your Firebase credentials.'
       );
@@ -58,7 +58,7 @@ export default function LoginScreen() {
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : 'Failed to sign in';
-      Alert.alert('Sign in failed', message);
+      appAlert('Sign in failed', message);
     } finally {
       setLoading(false);
     }

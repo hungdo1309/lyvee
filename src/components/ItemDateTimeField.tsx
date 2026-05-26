@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,12 @@ import {
   Platform,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { Calendar, DateData } from 'react-native-calendars';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { format } from 'date-fns';
+import { addMonths, format, parseISO, startOfMonth } from 'date-fns';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CancelButton } from './CancelButton';
+import { Button } from './Button';
 import { colors, radius, spacing } from '../constants/theme';
 
 interface ItemDateTimeFieldProps {
@@ -21,18 +24,39 @@ interface ItemDateTimeFieldProps {
 
 type PickerMode = 'date' | 'time';
 
+function mergeDateWithTime(dateString: string, timeSource: Date): Date {
+  const selected = parseISO(dateString);
+  return new Date(
+    selected.getFullYear(),
+    selected.getMonth(),
+    selected.getDate(),
+    timeSource.getHours(),
+    timeSource.getMinutes(),
+    0,
+    0
+  );
+}
+
 export function ItemDateTimeField({ value, onChange }: ItemDateTimeFieldProps) {
   const insets = useSafeAreaInsets();
   const [visible, setVisible] = useState(false);
   const [mode, setMode] = useState<PickerMode>('date');
   const [draft, setDraft] = useState(value);
+  const [calendarMonth, setCalendarMonth] = useState(() =>
+    format(startOfMonth(value), 'yyyy-MM-dd')
+  );
 
   useEffect(() => {
     if (visible) {
       setDraft(value);
       setMode('date');
+      setCalendarMonth(format(startOfMonth(value), 'yyyy-MM-dd'));
     }
   }, [visible, value]);
+
+  const draftKey = format(draft, 'yyyy-MM-dd');
+  const monthDate = useMemo(() => parseISO(calendarMonth), [calendarMonth]);
+  const monthLabel = format(monthDate, 'MMMM yyyy');
 
   const handleConfirm = () => {
     onChange(draft);
@@ -45,19 +69,28 @@ export function ItemDateTimeField({ value, onChange }: ItemDateTimeFieldProps) {
     }
   };
 
+  const handleDayPress = (day: DateData) => {
+    setDraft((current) => mergeDateWithTime(day.dateString, current));
+  };
+
+  const shiftMonth = (delta: number) => {
+    setCalendarMonth(format(startOfMonth(addMonths(monthDate, delta)), 'yyyy-MM-dd'));
+  };
+
   return (
     <>
       <TouchableOpacity
         style={styles.field}
         onPress={() => setVisible(true)}
         accessibilityRole="button"
-        accessibilityLabel={`Change date and time, ${format(value, 'PPP p')}`}
+        accessibilityLabel={`Change date and time, ${format(value, 'EEEE, MMMM d, yyyy h:mm a')}`}
       >
         <View style={styles.iconWrap}>
           <Ionicons name="calendar-outline" size={20} color={colors.primary} />
         </View>
         <View style={styles.copy}>
-          <Text style={styles.dateLine}>{format(value, 'EEEE, MMMM d, yyyy')}</Text>
+          <Text style={styles.weekdayLine}>{format(value, 'EEEE')}</Text>
+          <Text style={styles.dateLine}>{format(value, 'MMMM d, yyyy')}</Text>
           <Text style={styles.timeLine}>{format(value, 'h:mm a')}</Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -76,6 +109,12 @@ export function ItemDateTimeField({ value, onChange }: ItemDateTimeFieldProps) {
           >
             <View style={styles.handle} />
             <Text style={styles.sheetTitle}>Date & Time</Text>
+
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryWeekday}>{format(draft, 'EEEE')}</Text>
+              <Text style={styles.summaryDate}>{format(draft, 'MMMM d, yyyy')}</Text>
+              <Text style={styles.summaryTime}>{format(draft, 'h:mm a')}</Text>
+            </View>
 
             <View style={styles.segmentRow}>
               <TouchableOpacity
@@ -96,27 +135,87 @@ export function ItemDateTimeField({ value, onChange }: ItemDateTimeFieldProps) {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.pickerWrap}>
-              <DateTimePicker
-                value={draft}
-                mode={mode}
-                display={Platform.OS === 'ios' ? 'spinner' : 'spinner'}
-                onChange={handlePickerChange}
-                themeVariant="light"
-                style={styles.picker}
-              />
-            </View>
+            {mode === 'date' ? (
+              <View style={styles.calendarCard}>
+                <View style={styles.monthNav}>
+                  <TouchableOpacity
+                    style={styles.monthNavButton}
+                    onPress={() => shiftMonth(-1)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Previous month"
+                  >
+                    <Ionicons name="chevron-back" size={22} color={colors.primary} />
+                  </TouchableOpacity>
+                  <Text style={styles.monthNavTitle}>{monthLabel}</Text>
+                  <TouchableOpacity
+                    style={styles.monthNavButton}
+                    onPress={() => shiftMonth(1)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Next month"
+                  >
+                    <Ionicons name="chevron-forward" size={22} color={colors.primary} />
+                  </TouchableOpacity>
+                </View>
+
+                <Calendar
+                  key={calendarMonth}
+                  current={calendarMonth}
+                  onDayPress={handleDayPress}
+                  markedDates={{
+                    [draftKey]: {
+                      selected: true,
+                      selectedColor: colors.primary,
+                    },
+                  }}
+                  enableSwipeMonths={false}
+                  hideExtraDays={false}
+                  hideArrows
+                  renderHeader={() => null}
+                  headerStyle={styles.hiddenCalendarHeader}
+                  theme={{
+                    backgroundColor: colors.surface,
+                    calendarBackground: colors.surface,
+                    textSectionTitleColor: colors.textSecondary,
+                    selectedDayBackgroundColor: colors.primary,
+                    selectedDayTextColor: colors.onPrimary,
+                    todayTextColor: colors.primary,
+                    dayTextColor: colors.text,
+                    textDisabledColor: colors.textMuted,
+                    arrowColor: colors.primary,
+                    monthTextColor: colors.text,
+                    textDayFontWeight: '500',
+                    textMonthFontWeight: '700',
+                    textDayHeaderFontWeight: '700',
+                    textDayFontSize: 15,
+                    textDayHeaderFontSize: 12,
+                  }}
+                  style={styles.calendar}
+                />
+              </View>
+            ) : (
+              <View style={styles.pickerWrap}>
+                <DateTimePicker
+                  value={draft}
+                  mode="time"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'spinner'}
+                  onChange={handlePickerChange}
+                  themeVariant="light"
+                  style={styles.picker}
+                />
+              </View>
+            )}
 
             <View style={styles.actions}>
-              <TouchableOpacity
-                style={styles.cancelButton}
+              <CancelButton
                 onPress={() => setVisible(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
-                <Text style={styles.confirmButtonText}>Done</Text>
-              </TouchableOpacity>
+                style={styles.actionButton}
+              />
+              <Button
+                title="Done"
+                variant="primary"
+                onPress={handleConfirm}
+                style={styles.actionButton}
+              />
             </View>
           </Pressable>
         </Pressable>
@@ -148,6 +247,13 @@ const styles = StyleSheet.create({
   copy: {
     flex: 1,
     gap: 2,
+  },
+  weekdayLine: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   dateLine: {
     fontSize: 16,
@@ -186,6 +292,31 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.md,
   },
+  summaryCard: {
+    alignItems: 'center',
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  summaryWeekday: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.primary,
+    marginBottom: 2,
+  },
+  summaryDate: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  summaryTime: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
   segmentRow: {
     flexDirection: 'row',
     backgroundColor: colors.background,
@@ -215,6 +346,46 @@ const styles = StyleSheet.create({
   segmentTextActive: {
     color: colors.primary,
   },
+  calendarCard: {
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
+    marginBottom: spacing.md,
+  },
+  monthNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
+    backgroundColor: colors.surface,
+  },
+  monthNavButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthNavTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  hiddenCalendarHeader: {
+    height: 0,
+    overflow: 'hidden',
+    marginTop: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    opacity: 0,
+  },
+  calendar: {
+    borderWidth: 0,
+  },
   pickerWrap: {
     alignItems: 'center',
     marginBottom: spacing.md,
@@ -226,29 +397,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
-  cancelButton: {
+  actionButton: {
     flex: 1,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  confirmButton: {
-    flex: 1,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-  },
-  confirmButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.onPrimary,
   },
 });

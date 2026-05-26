@@ -10,12 +10,32 @@ import {
   updateDoc,
   arrayUnion,
   arrayRemove,
+  writeBatch,
 } from 'firebase/firestore';
 import * as Linking from 'expo-linking';
 import { db } from '../config/firebase';
 import { Group, GroupInvite } from '../types';
+import {
+  canManageGroup,
+  getGroupAdminIds,
+  isGroupAdmin,
+  isGroupOwner,
+  normalizeGroup,
+} from '../utils/groupRoles';
 import { deleteItemsForGroup } from './items';
 import { cancelGroupBilling } from './billing';
+import {
+  notifyGroupDeleted,
+  notifyGroupMemberJoined,
+  notifyGroupMemberLeft,
+  notifyGroupMemberRemoved,
+  notifyGroupOwnershipTransferred,
+  notifyGroupRenamed,
+  notifyGroupRoleDemoted,
+  notifyGroupRolePromoted,
+} from './groupNotifications';
+
+export { isGroupOwner, isGroupAdmin, canManageGroup, canDeleteGroup } from '../utils/groupRoles';
 
 function generateInviteCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -36,6 +56,12 @@ async function saveInviteMapping(group: Group): Promise<void> {
   await setDoc(doc(db, 'invites', group.inviteCode), invite);
 }
 
+function assertCanManageGroup(group: Group, requesterId: string, action: string): void {
+  if (!canManageGroup(group, requesterId)) {
+    throw new Error(`Only the group owner or an admin can ${action}`);
+  }
+}
+
 export function buildInviteLink(inviteCode: string): string {
   return Linking.createURL('join', { queryParams: { code: inviteCode } });
 }
@@ -54,6 +80,7 @@ export async function createGroup(
     id,
     name: name.trim(),
     ownerId,
+    adminIds: [],
     members: [ownerId],
     inviteCode: generateInviteCode(),
     createdAt: new Date().toISOString(),
@@ -85,13 +112,15 @@ export async function joinGroupByInviteCode(
     throw new Error('Group no longer exists');
   }
 
-  return groupSnap.data() as Group;
+  const group = normalizeGroup(groupSnap.data() as Group);
+  await notifyGroupMemberJoined(group, userId);
+  return group;
 }
 
 export async function getGroup(groupId: string): Promise<Group | null> {
   const snapshot = await getDoc(doc(db, 'groups', groupId));
   if (!snapshot.exists()) return null;
-  return snapshot.data() as Group;
+  return normalizeGroup(snapshot.data() as Group);
 }
 
 export function subscribeToUserGroups(
@@ -105,7 +134,7 @@ export function subscribeToUserGroups(
   return onSnapshot(
     q,
     (snapshot) => {
-      const groups = snapshot.docs.map((d) => d.data() as Group);
+      const groups = snapshot.docs.map((d) => normalizeGroup(d.data() as Group));
       callback(groups.sort((a, b) => a.name.localeCompare(b.name)));
     },
     (error) => {
@@ -122,7 +151,7 @@ export function subscribeToGroup(
   return onSnapshot(
     doc(db, 'groups', groupId),
     (snapshot) => {
-      callback(snapshot.exists() ? (snapshot.data() as Group) : null);
+      callback(snapshot.exists() ? normalizeGroup(snapshot.data() as Group) : null);
     },
     (error) => {
       console.warn('[groups] subscribeToGroup:', error.code, error.message);
@@ -138,27 +167,112 @@ export async function leaveGroup(
   const group = await getGroup(groupId);
   if (!group) throw new Error('Group not found');
   if (group.ownerId === userId) {
-    throw new Error('Group owners cannot leave. Delete the group instead.');
+    throw new Error('Group owners cannot leave. Transfer ownership or delete the group.');
   }
-  await updateDoc(doc(db, 'groups', groupId), {
+
+  const updates: Record<string, ReturnType<typeof arrayRemove>> = {
     members: arrayRemove(userId),
-  });
+  };
+  if (getGroupAdminIds(group).includes(userId)) {
+    updates.adminIds = arrayRemove(userId);
+  }
+
+  await updateDoc(doc(db, 'groups', groupId), updates);
+  await notifyGroupMemberLeft(group, userId);
 }
 
 export async function updateGroupName(
   groupId: string,
-  name: string
+  name: string,
+  requesterId: string
 ): Promise<void> {
   const group = await getGroup(groupId);
   if (!group) throw new Error('Group not found');
+  assertCanManageGroup(group, requesterId, 'rename the group');
 
   const trimmed = name.trim();
+  if (!trimmed) throw new Error('Group name is required');
+  if (trimmed === group.name) return;
+
   await updateDoc(doc(db, 'groups', groupId), { name: trimmed });
   await setDoc(
     doc(db, 'invites', group.inviteCode),
     { groupName: trimmed },
     { merge: true }
   );
+  await notifyGroupRenamed({ ...group, name: trimmed }, group.name, requesterId);
+}
+
+export async function transferGroupOwnership(
+  groupId: string,
+  newOwnerId: string,
+  requesterId: string
+): Promise<void> {
+  const group = await getGroup(groupId);
+  if (!group) throw new Error('Group not found');
+  if (!isGroupOwner(group, requesterId)) {
+    throw new Error('Only the group owner can transfer ownership');
+  }
+  if (newOwnerId === requesterId) {
+    throw new Error('You are already the group owner');
+  }
+  if (!group.members.includes(newOwnerId)) {
+    throw new Error('The new owner must be a member of this group');
+  }
+
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'groups', groupId), {
+    ownerId: newOwnerId,
+    adminIds: arrayRemove(newOwnerId),
+  });
+  batch.update(doc(db, 'invites', group.inviteCode), { ownerId: newOwnerId });
+  await batch.commit();
+  await notifyGroupOwnershipTransferred(group, newOwnerId, requesterId);
+}
+
+export async function promoteMemberToAdmin(
+  groupId: string,
+  memberId: string,
+  requesterId: string
+): Promise<void> {
+  const group = await getGroup(groupId);
+  if (!group) throw new Error('Group not found');
+  assertCanManageGroup(group, requesterId, 'change member roles');
+
+  if (!group.members.includes(memberId)) {
+    throw new Error('That user is not in this group');
+  }
+  if (memberId === group.ownerId) {
+    throw new Error('The owner already has full access');
+  }
+  if (getGroupAdminIds(group).includes(memberId)) {
+    return;
+  }
+
+  await updateDoc(doc(db, 'groups', groupId), {
+    adminIds: arrayUnion(memberId),
+  });
+  await notifyGroupRolePromoted(group, memberId, requesterId);
+}
+
+export async function demoteAdminToMember(
+  groupId: string,
+  memberId: string,
+  requesterId: string
+): Promise<void> {
+  const group = await getGroup(groupId);
+  if (!group) throw new Error('Group not found');
+  if (!isGroupOwner(group, requesterId)) {
+    throw new Error('Only the group owner can remove admin access');
+  }
+  if (!getGroupAdminIds(group).includes(memberId)) {
+    return;
+  }
+
+  await updateDoc(doc(db, 'groups', groupId), {
+    adminIds: arrayRemove(memberId),
+  });
+  await notifyGroupRoleDemoted(group, memberId, requesterId);
 }
 
 export async function removeMember(
@@ -168,15 +282,29 @@ export async function removeMember(
 ): Promise<void> {
   const group = await getGroup(groupId);
   if (!group) throw new Error('Group not found');
-  if (group.ownerId !== requesterId) {
-    throw new Error('Only the group owner can remove members');
-  }
+  assertCanManageGroup(group, requesterId, 'remove members');
+
   if (memberId === group.ownerId) {
     throw new Error('Cannot remove the group owner');
   }
-  await updateDoc(doc(db, 'groups', groupId), {
+  if (memberId === requesterId) {
+    throw new Error('Use leave group to remove yourself');
+  }
+  if (isGroupAdmin(group, requesterId) && !isGroupOwner(group, requesterId)) {
+    if (getGroupAdminIds(group).includes(memberId)) {
+      throw new Error('Admins can only remove regular members');
+    }
+  }
+
+  const updates: Record<string, ReturnType<typeof arrayRemove>> = {
     members: arrayRemove(memberId),
-  });
+  };
+  if (getGroupAdminIds(group).includes(memberId)) {
+    updates.adminIds = arrayRemove(memberId);
+  }
+
+  await updateDoc(doc(db, 'groups', groupId), updates);
+  await notifyGroupMemberRemoved(group, memberId, requesterId);
 }
 
 export async function regenerateInviteCode(
@@ -185,9 +313,7 @@ export async function regenerateInviteCode(
 ): Promise<Group> {
   const group = await getGroup(groupId);
   if (!group) throw new Error('Group not found');
-  if (group.ownerId !== requesterId) {
-    throw new Error('Only the group owner can regenerate the invite code');
-  }
+  assertCanManageGroup(group, requesterId, 'regenerate the invite code');
 
   const oldCode = group.inviteCode;
   const newCode = generateInviteCode();
@@ -206,18 +332,15 @@ export async function deleteGroup(
 ): Promise<void> {
   const group = await getGroup(groupId);
   if (!group) throw new Error('Group not found');
-  if (group.ownerId !== requesterId) {
+  if (!isGroupOwner(group, requesterId)) {
     throw new Error('Only the group owner can delete the group');
   }
 
+  await notifyGroupDeleted(group, requesterId);
   await deleteItemsForGroup(groupId);
   await cancelGroupBilling(groupId, requesterId);
   await deleteDoc(doc(db, 'invites', group.inviteCode));
   await deleteDoc(doc(db, 'groups', groupId));
-}
-
-export function isGroupOwner(group: Group, userId: string): boolean {
-  return group.ownerId === userId;
 }
 
 export function isGroupMember(group: Group, userId: string): boolean {

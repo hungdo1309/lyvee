@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import { useLocalSearchParams } from 'expo-router';
 import { GroupDetailContent } from '../../../../src/components/GroupDetailContent';
 import { Button } from '../../../../src/components/Button';
@@ -23,7 +24,12 @@ export default function GroupDetailScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      nestedScrollEnabled
+      keyboardShouldPersistTaps="handled"
+    >
       {group && (
         <View style={styles.hero}>
           <Text style={styles.groupName}>{group.name}</Text>

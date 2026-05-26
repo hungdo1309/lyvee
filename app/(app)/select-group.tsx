@@ -4,8 +4,8 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  Alert,
 } from 'react-native';
+import { appAlert } from '../../src/utils/dialog';
 import { router, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/context/AuthContext';
@@ -16,7 +16,7 @@ import { Card } from '../../src/components/Card';
 import { EmptyState } from '../../src/components/EmptyState';
 import { GroupCard } from '../../src/components/GroupCard';
 import { LoadingScreen } from '../../src/components/LoadingScreen';
-import { ScreenBackButton } from '../../src/components/ScreenBackButton';
+import { CancelButton } from '../../src/components/CancelButton';
 import { createGroup, joinGroupByInviteCode } from '../../src/services/groups';
 import { countActiveItems, formatActiveItemCount } from '../../src/utils/itemInstances';
 import { colors, layout, spacing, typography } from '../../src/constants/theme';
@@ -45,7 +45,7 @@ export default function SelectGroupScreen() {
       setGroupName('');
       setShowCreate(false);
     } catch (error: unknown) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to create group');
+      appAlert('Error', error instanceof Error ? error.message : 'Failed to create group');
     } finally {
       setSubmitting(false);
     }
@@ -60,7 +60,7 @@ export default function SelectGroupScreen() {
       setInviteCode('');
       setShowJoin(false);
     } catch (error: unknown) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Invalid invite code');
+      appAlert('Error', error instanceof Error ? error.message : 'Invalid invite code');
     } finally {
       setSubmitting(false);
     }
@@ -78,7 +78,7 @@ export default function SelectGroupScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {router.canGoBack() && (
         <View style={styles.backRow}>
-          <ScreenBackButton label="Cancel" />
+          <CancelButton size="sm" onPress={() => router.back()} />
         </View>
       )}
       <View style={styles.header}>
@@ -119,9 +119,7 @@ export default function SelectGroupScreen() {
             placeholder="e.g. Home, Family, Roommates"
           />
           <Button title="Create" onPress={handleCreate} loading={submitting} />
-          <Button
-            title="Cancel"
-            variant="ghost"
+          <CancelButton
             onPress={() => {
               setShowCreate(false);
               setGroupName('');
@@ -141,9 +139,7 @@ export default function SelectGroupScreen() {
             autoCapitalize="characters"
           />
           <Button title="Join Group" onPress={handleJoin} loading={submitting} />
-          <Button
-            title="Cancel"
-            variant="ghost"
+          <CancelButton
             onPress={() => {
               setShowJoin(false);
               setInviteCode('');

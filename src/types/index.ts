@@ -57,13 +57,17 @@ export interface User {
   name: string;
   email: string;
   pushToken?: string;
+  pushTokens?: string[];
   createdAt: string;
 }
+
+export type GroupMemberRole = 'owner' | 'admin' | 'member';
 
 export interface Group {
   id: string;
   name: string;
   ownerId: string;
+  adminIds?: string[];
   members: string[];
   inviteCode: string;
   createdAt: string;

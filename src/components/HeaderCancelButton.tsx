@@ -1,7 +1,6 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { CancelButton } from './CancelButton';
 import { dismissFormScreen } from '../utils/navigation';
-import { colors } from '../constants/theme';
 
 interface HeaderCancelButtonProps {
   label?: string;
@@ -13,7 +12,9 @@ export function HeaderCancelButton({
   onPress,
 }: HeaderCancelButtonProps) {
   return (
-    <TouchableOpacity
+    <CancelButton
+      label={label}
+      size="sm"
       onPress={() => {
         if (onPress) {
           onPress();
@@ -21,21 +22,6 @@ export function HeaderCancelButton({
         }
         dismissFormScreen();
       }}
-      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      style={styles.button}
-    >
-      <Text style={styles.label}>{label}</Text>
-    </TouchableOpacity>
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  button: {
-    paddingHorizontal: 4,
-  },
-  label: {
-    fontSize: 17,
-    color: colors.primary,
-    fontWeight: '400',
-  },
-});

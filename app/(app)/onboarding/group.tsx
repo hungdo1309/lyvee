@@ -4,14 +4,15 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  Alert,
 } from 'react-native';
+import { appAlert } from '../../../src/utils/dialog';
 import { router, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../../src/context/AuthContext';
 import { useApp } from '../../../src/context/AppContext';
 import { Input } from '../../../src/components/Input';
 import { Button } from '../../../src/components/Button';
+import { CancelButton } from '../../../src/components/CancelButton';
 import { Card } from '../../../src/components/Card';
 import { GroupCard } from '../../../src/components/GroupCard';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
@@ -40,7 +41,7 @@ export default function OnboardingGroupScreen() {
       const group = await createGroup(groupName.trim(), user.id);
       goToInvite(group.id);
     } catch (error: unknown) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to create group');
+      appAlert('Error', error instanceof Error ? error.message : 'Failed to create group');
     } finally {
       setSubmitting(false);
     }
@@ -53,7 +54,7 @@ export default function OnboardingGroupScreen() {
       const group = await joinGroupByInviteCode(inviteCode.trim(), user.id);
       goToInvite(group.id);
     } catch (error: unknown) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Invalid invite code');
+      appAlert('Error', error instanceof Error ? error.message : 'Invalid invite code');
     } finally {
       setSubmitting(false);
     }
@@ -100,9 +101,7 @@ export default function OnboardingGroupScreen() {
             autoFocus
           />
           <Button title="Create & Continue" onPress={handleCreate} loading={submitting} />
-          <Button
-            title="Cancel"
-            variant="ghost"
+          <CancelButton
             onPress={() => {
               setMode(null);
               setGroupName('');
@@ -123,9 +122,7 @@ export default function OnboardingGroupScreen() {
             autoFocus
           />
           <Button title="Join & Continue" onPress={handleJoin} loading={submitting} />
-          <Button
-            title="Cancel"
-            variant="ghost"
+          <CancelButton
             onPress={() => {
               setMode(null);
               setInviteCode('');

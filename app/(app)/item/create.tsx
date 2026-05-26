@@ -2,11 +2,11 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
-  Alert,
   TouchableOpacity,
   Text,
 } from 'react-native';
-import { KeyboardAwareScrollView } from '../../../src/components/KeyboardAwareScrollView';
+import { appAlert } from '../../../src/utils/dialog';
+import { ItemFormScreen } from '../../../src/components/ItemFormScreen';
 import { useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../../src/context/AuthContext';
 import { useApp } from '../../../src/context/AppContext';
@@ -30,12 +30,21 @@ import {
   defaultReminderForType,
 } from '../../../src/types';
 import { normalizeReminderOffset } from '../../../src/utils/reminders';
-import { getDefaultItemDateTime, toISODateTime } from '../../../src/utils/dates';
+import { getDefaultItemDateTime, getDefaultItemDateTimeForDate, toISODateTime } from '../../../src/utils/dates';
 
 export default function CreateItemScreen() {
-  const { groupId: paramGroupId } = useLocalSearchParams<{ groupId: string }>();
+  const { groupId: paramGroupId, date: paramDate } = useLocalSearchParams<{
+    groupId?: string;
+    date?: string;
+  }>();
   const { user } = useAuth();
   const { groups, activeGroup } = useApp();
+
+  const calendarDefaultDateTime = useMemo(
+    () =>
+      paramDate ? getDefaultItemDateTimeForDate(paramDate) : getDefaultItemDateTime(),
+    [paramDate]
+  );
 
   const defaultGroupId = paramGroupId || activeGroup?.id || groups[0]?.id || '';
   const [groupId, setGroupId] = useState(defaultGroupId);
@@ -65,7 +74,7 @@ export default function CreateItemScreen() {
   const [recurringRule, setRecurringRule] =
     useState<RecurringRule>(DEFAULT_RECURRING_RULE);
   const [hasDate, setHasDate] = useState(true);
-  const [dateTime, setDateTime] = useState(getDefaultItemDateTime);
+  const [dateTime, setDateTime] = useState(calendarDefaultDateTime);
   const [reminderOffset, setReminderOffset] = useState<ItemReminderOffset>(
     defaultReminderForType('task')
   );
@@ -88,15 +97,15 @@ export default function CreateItemScreen() {
 
   const handleCreate = async () => {
     if (!title.trim()) {
-      Alert.alert('Error', 'Title is required');
+      appAlert('Error', 'Title is required');
       return;
     }
     if (!user || !groupId) {
-      Alert.alert('Error', 'Please create or select a group first');
+      appAlert('Error', 'Please create or select a group first');
       return;
     }
     if (visibility === 'custom' && allowedMembers.length === 0) {
-      Alert.alert('Error', 'Select at least one member for custom visibility');
+      appAlert('Error', 'Select at least one member for custom visibility');
       return;
     }
 
@@ -124,7 +133,7 @@ export default function CreateItemScreen() {
       );
       dismissItemFlow();
     } catch (error: unknown) {
-      Alert.alert(
+      appAlert(
         'Error',
         error instanceof Error ? error.message : 'Failed to create item'
       );
@@ -134,10 +143,7 @@ export default function CreateItemScreen() {
   };
 
   return (
-    <KeyboardAwareScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-    >
+    <ItemFormScreen title="New Item">
       {groups.length > 0 && (
         <GroupPicker
           groupId={groupId}
@@ -185,7 +191,7 @@ export default function CreateItemScreen() {
                 setHasDate(false);
                 setReminderOffset('none');
               } else {
-                setDateTime(getDefaultItemDateTime());
+                setDateTime(calendarDefaultDateTime);
                 setHasDate(true);
                 setReminderOffset(defaultReminderForType(type));
               }
@@ -221,19 +227,11 @@ export default function CreateItemScreen() {
       />
 
       <Button title="Create" onPress={handleCreate} loading={loading} size="lg" />
-    </KeyboardAwareScrollView>
+    </ItemFormScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    padding: spacing.md,
-    paddingBottom: spacing.xxl,
-  },
   dateSection: {
     marginBottom: spacing.md,
   },

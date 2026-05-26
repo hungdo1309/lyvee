@@ -3,11 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
-  Alert,
   TextInput,
   InteractionManager,
+  Platform,
 } from 'react-native';
+import { appAlert } from '../../../../src/utils/dialog';
+import { FlatList } from 'react-native-gesture-handler';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,6 +16,7 @@ import { useAuth } from '../../../../src/context/AuthContext';
 import { useApp } from '../../../../src/context/AppContext';
 import { Input } from '../../../../src/components/Input';
 import { Button } from '../../../../src/components/Button';
+import { CancelButton } from '../../../../src/components/CancelButton';
 import { Card } from '../../../../src/components/Card';
 import { EmptyState } from '../../../../src/components/EmptyState';
 import { GroupCard } from '../../../../src/components/GroupCard';
@@ -23,6 +25,7 @@ import { LoadingScreen } from '../../../../src/components/LoadingScreen';
 import { KeyboardAvoidingScreen } from '../../../../src/components/KeyboardAvoidingScreen';
 import { Fab } from '../../../../src/components/Fab';
 import { createGroup, joinGroupByInviteCode } from '../../../../src/services/groups';
+import { getMemberRole } from '../../../../src/utils/groupRoles';
 import { countActiveItems, formatActiveItemCount } from '../../../../src/utils/itemInstances';
 import { colors, layout, radius, spacing, typography } from '../../../../src/constants/theme';
 
@@ -92,7 +95,7 @@ export default function GroupsScreen() {
       setShowCreate(false);
       setExpandedGroupId(group.id);
     } catch (error: unknown) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to create group');
+      appAlert('Error', error instanceof Error ? error.message : 'Failed to create group');
     } finally {
       setSubmitting(false);
     }
@@ -107,7 +110,7 @@ export default function GroupsScreen() {
       setInviteCode('');
       setExpandedGroupId(group.id);
     } catch (error: unknown) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Invalid invite code');
+      appAlert('Error', error instanceof Error ? error.message : 'Invalid invite code');
     } finally {
       setSubmitting(false);
     }
@@ -156,9 +159,7 @@ export default function GroupsScreen() {
                 placeholder="e.g. Home, Family, Roommates"
               />
               <Button title="Create Group" onPress={handleCreate} loading={submitting} />
-              <Button
-                title="Cancel"
-                variant="ghost"
+              <CancelButton
                 onPress={() => {
                   setShowCreate(false);
                   setGroupName('');
@@ -172,9 +173,10 @@ export default function GroupsScreen() {
           data={groups}
           keyExtractor={(g) => g.id}
           contentContainerStyle={styles.list}
+          nestedScrollEnabled
           keyboardShouldPersistTaps={showCreate ? 'always' : 'handled'}
           keyboardDismissMode={showCreate ? 'none' : 'on-drag'}
-          automaticallyAdjustKeyboardInsets
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
           ListHeaderComponent={listHeader}
           ListEmptyComponent={
             <EmptyState
@@ -185,13 +187,15 @@ export default function GroupsScreen() {
             />
           }
           renderItem={({ item: group }) => {
-            const isOwner = group.ownerId === user?.id;
+            const role = user ? getMemberRole(group, user.id) : null;
+            const roleLabel =
+              role === 'owner' ? ' · You own this' : role === 'admin' ? ' · Admin' : '';
             const expanded = expandedGroupId === group.id;
             return (
               <View>
                 <GroupCard
                   name={group.name}
-                  meta={`${group.members.length} member${group.members.length !== 1 ? 's' : ''}${isOwner ? ' · You own this' : ''} · ${getActiveItemLabel(group.id)}`}
+                  meta={`${group.members.length} member${group.members.length !== 1 ? 's' : ''}${roleLabel} · ${getActiveItemLabel(group.id)}`}
                   expanded={expanded}
                   onPress={() =>
                     setExpandedGroupId((current) =>

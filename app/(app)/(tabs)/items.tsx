@@ -108,7 +108,8 @@ export default function ItemsScreen() {
     if (instance.item.type !== 'task') return;
     await toggleItemComplete(
       instance.item,
-      instance.isRecurring ? instance.occurrenceDate : undefined
+      instance.isRecurring ? instance.occurrenceDate : undefined,
+      user?.id
     );
   };
 
@@ -132,7 +133,7 @@ export default function ItemsScreen() {
   };
 
   const handleDeleteItem = async (instance: ItemInstance) => {
-    await deleteItem(instance.itemId);
+    await deleteItem(instance.itemId, user?.id);
     setExpandedInstanceKey((current) =>
       current === instance.instanceKey ? null : current
     );

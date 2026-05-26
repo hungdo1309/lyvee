@@ -41,6 +41,7 @@ export default function CalendarScreen() {
   const [filters, setFilters] = useState<CalendarFilters>(DEFAULT_CALENDAR_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [selectedDate, setSelectedDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
 
   const { members: groupMembers } = useGroupMembers(activeGroup?.members ?? []);
 
@@ -82,7 +83,8 @@ export default function CalendarScreen() {
     if (instance.item.type !== 'task') return;
     await toggleItemComplete(
       instance.item,
-      instance.isRecurring ? instance.occurrenceDate : undefined
+      instance.isRecurring ? instance.occurrenceDate : undefined,
+      user?.id
     );
   };
 
@@ -99,7 +101,7 @@ export default function CalendarScreen() {
   };
 
   const handleDeleteItem = async (instance: ItemInstance) => {
-    await deleteItem(instance.itemId);
+    await deleteItem(instance.itemId, user?.id);
   };
 
   const handleGroupChange = async (groupId: string) => {
@@ -110,7 +112,7 @@ export default function CalendarScreen() {
   const handleCreateItem = () => {
     router.push({
       pathname: '/(app)/item/create',
-      params: { groupId: activeGroup?.id ?? '' },
+      params: { groupId: activeGroup?.id ?? '', date: selectedDate },
     });
   };
 
@@ -196,6 +198,8 @@ export default function CalendarScreen() {
               userId={user?.id}
               visibleMonth={visibleMonth}
               onVisibleMonthChange={setVisibleMonth}
+              selectedDate={selectedDate}
+              onSelectedDateChange={setSelectedDate}
               includeExpired={filters.showExpired}
             />
           </>

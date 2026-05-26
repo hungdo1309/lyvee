@@ -1,0 +1,26 @@
+---
+description: Build and verify UI/UX for both iOS and Android
+alwaysApply: true
+---
+
+# Cross-platform (iOS + Android)
+
+Lyvee is Expo/React Native. Treat **every UI, interaction, and layout change as cross-platform by default** unless the user explicitly asks for one platform only.
+
+## Before finishing any task
+
+- Consider both platforms when changing layout, navigation, gestures, keyboard behavior, safe areas, modals, or buttons.
+- Prefer shared components and constants over platform-specific one-offs.
+- When platform differences exist, handle them explicitly with `Platform.OS` or small helpers — do not ship iOS-only assumptions.
+
+## Project conventions
+
+- **Safe areas**: Use `useSafeAreaInsets()` for top/bottom padding on screens and forms.
+- **Keyboard**: Android uses `softwareKeyboardLayoutMode: "resize"` in `app.json`. Do not stack `KeyboardAvoidingView` on Android unless there is a clear reason.
+- **Gestures / swipe actions**: Use `react-native-gesture-handler` (`Swipeable`, `FlatList`, `ScrollView`, touchables). Enable `nestedScrollEnabled` when swipeables live inside scrollable lists.
+- **iOS-only ScrollView props**: Gate props like `contentInsetAdjustmentBehavior` and `automaticallyAdjustsScrollIndicatorInsets` to iOS.
+- **Modals / forms**: Keep custom headers and padding consistent; account for Android top bar height when computing keyboard offsets.
+
+## When reporting done
+
+Briefly note any iOS vs Android handling added, or confirm the change is inherently cross-platform.

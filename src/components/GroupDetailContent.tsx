@@ -4,20 +4,21 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   Share,
   ActivityIndicator,
 } from 'react-native';
+import { appAlert } from '../utils/dialog';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { Button } from './Button';
+import { Input } from './Input';
+import { GroupMemberRow } from './GroupMemberRow';
 import { useGroupMembers } from '../hooks/useGroupMembers';
 import {
   countActiveItems,
   countExpiredItems,
   formatGroupItemCounts,
 } from '../utils/itemInstances';
-import { getNameInitials } from '../utils/names';
 import {
   subscribeToGroup,
   buildInviteMessage,
@@ -25,11 +26,22 @@ import {
   removeMember,
   leaveGroup,
   deleteGroup,
-  isGroupOwner,
+  updateGroupName,
+  transferGroupOwnership,
+  promoteMemberToAdmin,
+  demoteAdminToMember,
+  canManageGroup,
+  canDeleteGroup,
   ensureGroupInvite,
 } from '../services/groups';
-import { colors, spacing, radius, typography } from '../constants/theme';
-import { Group } from '../types';
+import {
+  getMemberActions,
+  getMemberRole,
+  MemberAction,
+  sortMembersByRole,
+} from '../utils/groupRoles';
+import { colors, spacing, radius } from '../constants/theme';
+import { Group, User } from '../types';
 
 interface GroupDetailContentProps {
   groupId: string;
@@ -47,6 +59,8 @@ export function GroupDetailContent({
   const [group, setGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [renaming, setRenaming] = useState(false);
 
   useEffect(() => {
     if (!groupId) return;
@@ -61,7 +75,17 @@ export function GroupDetailContent({
     return unsubscribe;
   }, [groupId, user]);
 
+  useEffect(() => {
+    if (group) {
+      setNameDraft(group.name);
+    }
+  }, [group?.id, group?.name]);
+
   const { members, loading: membersLoading } = useGroupMembers(group?.members ?? []);
+  const sortedMembers = useMemo(
+    () => (group ? sortMembersByRole(group, members) : members),
+    [group, members]
+  );
   const groupItems = useMemo(
     () => items.filter((item) => item.groupId === groupId),
     [items, groupId]
@@ -92,15 +116,37 @@ export function GroupDetailContent({
     );
   }
 
-  const owner = isGroupOwner(group, user.id);
+  const manager = canManageGroup(group, user.id);
+  const owner = canDeleteGroup(group, user.id);
   const memberCount = Math.max(members.length, group.members.length);
 
   const handleShareInvite = async () => {
     await Share.share({ message: buildInviteMessage(group) });
   };
 
+  const handleSaveName = async () => {
+    const trimmed = nameDraft.trim();
+    if (!trimmed) {
+      appAlert('Error', 'Group name is required');
+      return;
+    }
+    if (trimmed === group.name) return;
+
+    setRenaming(true);
+    try {
+      await updateGroupName(group.id, trimmed, user.id);
+    } catch (error: unknown) {
+      appAlert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to update group name'
+      );
+    } finally {
+      setRenaming(false);
+    }
+  };
+
   const handleRegenerateCode = () => {
-    Alert.alert(
+    appAlert(
       'Regenerate invite code',
       'The old code will stop working. Continue?',
       [
@@ -112,9 +158,9 @@ export function GroupDetailContent({
             setSubmitting(true);
             try {
               await regenerateInviteCode(group.id, user.id);
-              Alert.alert('Done', 'A new invite code has been generated.');
+              appAlert('Done', 'A new invite code has been generated.');
             } catch (error: unknown) {
-              Alert.alert('Error', error instanceof Error ? error.message : 'Failed');
+              appAlert('Error', error instanceof Error ? error.message : 'Failed');
             } finally {
               setSubmitting(false);
             }
@@ -124,25 +170,75 @@ export function GroupDetailContent({
     );
   };
 
-  const handleRemoveMember = (memberId: string, memberName: string) => {
-    Alert.alert('Remove member', `Remove ${memberName} from "${group.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await removeMember(group.id, memberId, user.id);
-          } catch (error: unknown) {
-            Alert.alert('Error', error instanceof Error ? error.message : 'Failed');
+  const runMemberAction = (action: MemberAction, member: User) => {
+    if (action === 'remove') {
+      appAlert(
+        `Remove ${member.name}?`,
+        `They'll lose access to ${group.name} and everything shared in this group.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await removeMember(group.id, member.id, user.id);
+              } catch (error: unknown) {
+                appAlert('Error', error instanceof Error ? error.message : 'Failed');
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    if (action === 'makeAdmin' || action === 'makeMember') {
+      void (async () => {
+        setSubmitting(true);
+        try {
+          if (action === 'makeAdmin') {
+            await promoteMemberToAdmin(group.id, member.id, user.id);
+          } else {
+            await demoteAdminToMember(group.id, member.id, user.id);
           }
+        } catch (error: unknown) {
+          appAlert('Error', error instanceof Error ? error.message : 'Failed');
+        } finally {
+          setSubmitting(false);
+        }
+      })();
+      return;
+    }
+
+    appAlert(
+      'Transfer ownership',
+      `Make ${member.name} the owner of "${group.name}"? You will stay in the group as a member.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Make owner',
+          onPress: async () => {
+            setSubmitting(true);
+            try {
+              await transferGroupOwnership(group.id, member.id, user.id);
+              appAlert('Done', `${member.name} is now the group owner.`);
+            } catch (error: unknown) {
+              appAlert(
+                'Error',
+                error instanceof Error ? error.message : 'Failed to transfer ownership'
+              );
+            } finally {
+              setSubmitting(false);
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
   const handleLeave = () => {
-    Alert.alert(
+    appAlert(
       'Are you sure you want to proceed?',
       'You will leave this group and lose access to its shared items.',
       [
@@ -155,7 +251,7 @@ export function GroupDetailContent({
               await leaveGroup(group.id, user.id);
               onLeave?.();
             } catch (error: unknown) {
-              Alert.alert('Error', error instanceof Error ? error.message : 'Failed');
+              appAlert('Error', error instanceof Error ? error.message : 'Failed');
             }
           },
         },
@@ -164,13 +260,13 @@ export function GroupDetailContent({
   };
 
   const handleDeleteGroup = () => {
-    Alert.alert(
-      'Are you sure you want to proceed?',
-      'This will permanently delete the group, remove all members, delete all items, and cancel billing for this group.',
+    appAlert(
+      `Delete ${group.name}?`,
+      'Everyone will lose access, and all items in this group will be permanently removed.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete group',
+          text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             setSubmitting(true);
@@ -178,7 +274,7 @@ export function GroupDetailContent({
               await deleteGroup(group.id, user.id);
               onDelete?.();
             } catch (error: unknown) {
-              Alert.alert('Error', error instanceof Error ? error.message : 'Failed');
+              appAlert('Error', error instanceof Error ? error.message : 'Failed');
             } finally {
               setSubmitting(false);
             }
@@ -190,18 +286,43 @@ export function GroupDetailContent({
 
   return (
     <View style={styles.container}>
+      {manager ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Group name</Text>
+          <Input
+            value={nameDraft}
+            onChangeText={setNameDraft}
+            placeholder="e.g. Home, Family, Roommates"
+            autoCapitalize="words"
+          />
+          <Button
+            title="Save name"
+            onPress={handleSaveName}
+            loading={renaming}
+            disabled={
+              renaming || !nameDraft.trim() || nameDraft.trim() === group.name
+            }
+          />
+        </View>
+      ) : (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Group name</Text>
+          <Text style={styles.groupNameReadOnly}>{group.name}</Text>
+        </View>
+      )}
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Members ({memberCount})</Text>
 
-        <View style={styles.addMemberBlock}>
-          <Text style={styles.addMemberHint}>
-            Share the invite code so others can join this group.
-          </Text>
-          <TouchableOpacity style={styles.inviteCard} onPress={handleShareInvite}>
-            <Text style={styles.inviteCode}>{group.inviteCode}</Text>
-            <Text style={styles.inviteHint}>Tap to share code & link</Text>
-          </TouchableOpacity>
-          {owner && (
+        {manager && (
+          <View style={styles.addMemberBlock}>
+            <Text style={styles.addMemberHint}>
+              Share the invite code so others can join this group.
+            </Text>
+            <TouchableOpacity style={styles.inviteCard} onPress={handleShareInvite}>
+              <Text style={styles.inviteCode}>{group.inviteCode}</Text>
+              <Text style={styles.inviteHint}>Tap to share code & link</Text>
+            </TouchableOpacity>
             <Button
               title="Regenerate code"
               variant="secondary"
@@ -209,45 +330,45 @@ export function GroupDetailContent({
               loading={submitting}
               style={styles.regenerateButton}
             />
-          )}
-        </View>
+          </View>
+        )}
+
+        {!manager && (
+          <Text style={styles.memberHint}>
+            Only owners and admins can manage group settings and invite codes.
+          </Text>
+        )}
+
+        {manager && sortedMembers.some(
+          (member) => getMemberActions(group, user.id, member.id).length > 0
+        ) && (
+          <Text style={styles.memberHint}>
+            Swipe left on a member, then tap the role or delete icon.
+          </Text>
+        )}
 
         {membersLoading ? (
           <ActivityIndicator color={colors.primary} style={styles.membersLoading} />
-        ) : members.length === 0 ? (
+        ) : sortedMembers.length === 0 ? (
           <Text style={styles.emptyText}>
             {group.members.length > 0
               ? 'Member profiles could not be loaded.'
               : 'No members yet.'}
           </Text>
         ) : (
-          members.map((member) => {
-            const isMemberOwner = member.id === group.ownerId;
-            return (
-              <View key={member.id} style={styles.memberRow}>
-                <View style={styles.memberAvatar}>
-                  <Text style={styles.memberAvatarText}>
-                    {getNameInitials(member.name)}
-                  </Text>
-                </View>
-                <View style={styles.memberInfo}>
-                  <Text style={styles.memberName}>
-                    {member.name}
-                    {member.id === user.id ? ' (you)' : ''}
-                  </Text>
-                  <Text style={styles.memberEmail}>{member.email}</Text>
-                </View>
-                {owner && !isMemberOwner && member.id !== user.id && (
-                  <TouchableOpacity
-                    onPress={() => handleRemoveMember(member.id, member.name)}
-                  >
-                    <Text style={styles.removeText}>Remove</Text>
-                  </TouchableOpacity>
-                )}
-                {isMemberOwner && <Text style={styles.ownerBadge}>Owner</Text>}
-              </View>
-            );
-          })
+          <View style={styles.memberList}>
+            {sortedMembers.map((member) => (
+              <GroupMemberRow
+                key={member.id}
+                group={group}
+                member={member}
+                currentUserId={user.id}
+                actions={getMemberActions(group, user.id, member.id)}
+                disabled={submitting}
+                onAction={runMemberAction}
+              />
+            ))}
+          </View>
         )}
       </View>
 
@@ -256,21 +377,21 @@ export function GroupDetailContent({
         <Text style={styles.countText}>{itemCountLabel}</Text>
       </View>
 
-      {!owner ? (
-        <Button title="Leave group" variant="danger" onPress={handleLeave} />
-      ) : (
+      {owner ? (
         <View style={styles.ownerActions}>
           <Text style={styles.ownerDeleteHint}>
-            As the owner, you cannot leave this group. Delete it to remove all members
-            and cancel billing.
+            As the owner, you cannot leave this group. Swipe a member left and assign
+            Owner to transfer ownership, or delete the group below.
           </Text>
           <Button
             title="Delete group"
-            variant="danger"
+            variant="cancel"
             onPress={handleDeleteGroup}
             loading={submitting}
           />
         </View>
+      ) : (
+        <Button title="Leave group" variant="danger" onPress={handleLeave} />
       )}
     </View>
   );
@@ -312,6 +433,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.text,
   },
+  groupNameReadOnly: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+  },
   addMemberBlock: {
     marginBottom: spacing.lg,
     paddingBottom: spacing.lg,
@@ -323,6 +449,12 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.md,
     lineHeight: 20,
+  },
+  memberHint: {
+    fontSize: 13,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+    lineHeight: 18,
   },
   regenerateButton: {
     alignSelf: 'stretch',
@@ -348,53 +480,14 @@ const styles = StyleSheet.create({
   membersLoading: {
     marginVertical: spacing.md,
   },
+  memberList: {
+    marginHorizontal: -spacing.sm,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+  },
   emptyText: {
     fontSize: 14,
     color: colors.textMuted,
-  },
-  memberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-  },
-  memberAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  memberAvatarText: {
-    color: colors.onPrimary,
-    fontWeight: '700',
-    fontSize: 14,
-    letterSpacing: -0.5,
-  },
-  memberInfo: {
-    flex: 1,
-  },
-  memberName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  memberEmail: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  removeText: {
-    color: colors.error,
-    fontWeight: '500',
-    fontSize: 14,
-  },
-  ownerBadge: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.primary,
   },
   ownerActions: {
     gap: spacing.sm,

@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { appAlert } from '../utils/dialog';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { addMonths } from 'date-fns';
 import { ItemInstance, expandItem } from '../utils/itemInstances';
@@ -59,10 +60,14 @@ export function ItemCard({
 
   const handleDeletePress = () => {
     if (!onDelete) return;
-    Alert.alert('Are you sure you want to proceed?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: onDelete },
-    ]);
+    appAlert(
+      'Delete this item?',
+      `"${item.title}" will be permanently removed and can't be recovered.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete item', style: 'destructive', onPress: onDelete },
+      ]
+    );
   };
 
   const showOwnerActions = isOwner && (!!onEdit || !!onDelete);
@@ -137,12 +142,6 @@ export function ItemCard({
             </Text>
           ) : null}
 
-          {tags.length > 0 && (
-            <View style={styles.tags}>
-              <TagPills tags={tags} maxVisible={expanded ? undefined : 4} />
-            </View>
-          )}
-
           {!expanded && assigneeLabel ? (
             <Text style={styles.assignee}>Assigned to {assigneeLabel}</Text>
           ) : null}
@@ -152,12 +151,6 @@ export function ItemCard({
               {formatRecurringLabel(item.recurringRule)}
             </Text>
           )}
-
-          {!expanded && item.notes ? (
-            <Text style={styles.notesPreview} numberOfLines={1}>
-              {item.notes}
-            </Text>
-          ) : null}
 
           {expanded && (
             <View style={styles.expandedSection}>
@@ -182,6 +175,13 @@ export function ItemCard({
               ) : (
                 <Text style={styles.metaMuted}>Unassigned</Text>
               )}
+
+              {tags.length > 0 ? (
+                <View style={styles.tagsBlock}>
+                  <Text style={styles.sectionLabel}>Tags</Text>
+                  <TagPills tags={tags} />
+                </View>
+              ) : null}
 
               {item.notes ? (
                 <View style={styles.notesBlock}>
@@ -304,8 +304,8 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
     color: colors.textMuted,
   },
-  tags: {
-    marginTop: spacing.sm,
+  tagsBlock: {
+    marginTop: spacing.md,
   },
   assignee: {
     fontSize: 13,
@@ -318,12 +318,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '500',
     marginTop: spacing.sm,
-  },
-  notesPreview: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-    lineHeight: 20,
   },
   expandedSection: {
     marginTop: spacing.md,

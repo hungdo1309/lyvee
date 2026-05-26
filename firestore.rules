@@ -19,13 +19,131 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/groups/$(groupId)).data.ownerId == request.auth.uid;
     }
 
+    function groupAdminIds(groupId) {
+      return get(/databases/$(database)/documents/groups/$(groupId)).data.get('adminIds', []);
+    }
+
+    function isGroupAdmin(groupId) {
+      return request.auth.uid in groupAdminIds(groupId);
+    }
+
+    function isGroupManager(groupId) {
+      return isGroupOwner(groupId) || isGroupAdmin(groupId);
+    }
+
+    function groupInviteFieldsUnchanged() {
+      return request.resource.data.inviteCode == resource.data.inviteCode
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function groupAdminIdsUnchanged() {
+      return request.resource.data.get('adminIds', []) == resource.data.get('adminIds', []);
+    }
+
     function isJoiningGroup() {
       return request.auth.uid in request.resource.data.members
         && !(request.auth.uid in resource.data.members)
         && request.resource.data.members.size() == resource.data.members.size() + 1
         && request.resource.data.name == resource.data.name
         && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.inviteCode == resource.data.inviteCode;
+        && groupInviteFieldsUnchanged()
+        && groupAdminIdsUnchanged();
+    }
+
+    function isMemberLeaving() {
+      return request.auth.uid in resource.data.members
+        && resource.data.ownerId != request.auth.uid
+        && !(request.auth.uid in request.resource.data.members)
+        && request.resource.data.members.size() == resource.data.members.size() - 1
+        && request.resource.data.name == resource.data.name
+        && request.resource.data.ownerId == resource.data.ownerId
+        && groupInviteFieldsUnchanged()
+        && (
+          groupAdminIdsUnchanged()
+          || (
+            request.auth.uid in resource.data.get('adminIds', [])
+            && request.resource.data.get('adminIds', []).size()
+              == resource.data.get('adminIds', []).size() - 1
+          )
+        );
+    }
+
+    function isOwnerRemovingMember(groupId) {
+      return isGroupOwner(groupId)
+        && request.resource.data.members.size() == resource.data.members.size() - 1
+        && resource.data.ownerId in request.resource.data.members
+        && request.resource.data.name == resource.data.name
+        && request.resource.data.ownerId == resource.data.ownerId
+        && groupInviteFieldsUnchanged()
+        && request.resource.data.get('adminIds', []).size()
+          <= resource.data.get('adminIds', []).size()
+        && request.resource.data.get('adminIds', []).size()
+          >= resource.data.get('adminIds', []).size() - 1;
+    }
+
+    function isAdminRemovingMember(groupId) {
+      return isGroupAdmin(groupId)
+        && !isGroupOwner(groupId)
+        && request.resource.data.members.size() == resource.data.members.size() - 1
+        && resource.data.ownerId in request.resource.data.members
+        && request.resource.data.name == resource.data.name
+        && request.resource.data.ownerId == resource.data.ownerId
+        && groupInviteFieldsUnchanged()
+        && groupAdminIdsUnchanged();
+    }
+
+    function isManagerRenaming(groupId) {
+      return isGroupManager(groupId)
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name != resource.data.name
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.members == resource.data.members
+        && groupInviteFieldsUnchanged()
+        && groupAdminIdsUnchanged();
+    }
+
+    function isManagerRegeneratingInvite(groupId) {
+      return isGroupManager(groupId)
+        && request.resource.data.inviteCode != resource.data.inviteCode
+        && request.resource.data.name == resource.data.name
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.members == resource.data.members
+        && request.resource.data.createdAt == resource.data.createdAt
+        && groupAdminIdsUnchanged();
+    }
+
+    function isPromotingMemberToAdmin(groupId) {
+      return isGroupManager(groupId)
+        && request.resource.data.members == resource.data.members
+        && request.resource.data.name == resource.data.name
+        && request.resource.data.ownerId == resource.data.ownerId
+        && groupInviteFieldsUnchanged()
+        && request.resource.data.get('adminIds', []).size()
+          == resource.data.get('adminIds', []).size() + 1;
+    }
+
+    function isDemotingAdminToMember(groupId) {
+      return isGroupOwner(groupId)
+        && request.resource.data.members == resource.data.members
+        && request.resource.data.name == resource.data.name
+        && request.resource.data.ownerId == resource.data.ownerId
+        && groupInviteFieldsUnchanged()
+        && request.resource.data.get('adminIds', []).size()
+          == resource.data.get('adminIds', []).size() - 1;
+    }
+
+    function isOwnerTransferringOwnership(groupId) {
+      return isGroupOwner(groupId)
+        && request.resource.data.ownerId != resource.data.ownerId
+        && request.resource.data.ownerId in request.resource.data.members
+        && request.resource.data.members == resource.data.members
+        && request.resource.data.name == resource.data.name
+        && groupInviteFieldsUnchanged()
+        && request.resource.data.get('adminIds', []).size()
+          <= resource.data.get('adminIds', []).size()
+        && request.resource.data.get('adminIds', []).size()
+          >= resource.data.get('adminIds', []).size() - 1;
     }
 
     match /users/{userId} {
@@ -37,10 +155,9 @@ service cloud.firestore {
     match /invites/{inviteCode} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated()
-        && request.resource.data.ownerId == request.auth.uid
-        && isGroupOwner(request.resource.data.groupId);
-      allow update: if isAuthenticated() && isGroupOwner(resource.data.groupId);
-      allow delete: if isAuthenticated() && isGroupOwner(resource.data.groupId);
+        && isGroupManager(request.resource.data.groupId);
+      allow update: if isAuthenticated() && isGroupManager(resource.data.groupId);
+      allow delete: if isAuthenticated() && isGroupManager(resource.data.groupId);
     }
 
     match /groups/{groupId} {
@@ -49,8 +166,15 @@ service cloud.firestore {
         && request.resource.data.ownerId == request.auth.uid
         && request.auth.uid in request.resource.data.members;
       allow update: if isAuthenticated() && (
-        request.auth.uid in resource.data.members
-        || isJoiningGroup()
+        isJoiningGroup()
+        || isMemberLeaving()
+        || isOwnerRemovingMember(groupId)
+        || isAdminRemovingMember(groupId)
+        || isManagerRenaming(groupId)
+        || isManagerRegeneratingInvite(groupId)
+        || isPromotingMemberToAdmin(groupId)
+        || isDemotingAdminToMember(groupId)
+        || isOwnerTransferringOwnership(groupId)
       );
       allow delete: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
     }
@@ -71,6 +195,18 @@ service cloud.firestore {
         && request.resource.data.message.size() > 0
         && request.resource.data.message.size() <= 2000;
       allow update, delete: if false;
+    }
+
+    match /pushEvents/{eventId} {
+      allow create: if isAuthenticated()
+        && request.resource.data.actorId == request.auth.uid
+        && request.resource.data.recipientIds is list
+        && request.resource.data.recipientIds.size() > 0
+        && request.resource.data.recipientIds.size() <= 50
+        && request.resource.data.title is string
+        && request.resource.data.body is string
+        && request.resource.data.status == 'pending';
+      allow read, update, delete: if false;
     }
   }
 }

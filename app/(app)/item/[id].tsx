@@ -3,10 +3,9 @@ import {
   View,
   Text,
   StyleSheet,
-  Alert,
   TouchableOpacity,
 } from 'react-native';
-import { KeyboardAwareScrollView } from '../../../src/components/KeyboardAwareScrollView';
+import { appAlert } from '../../../src/utils/dialog';
 import { useLocalSearchParams } from 'expo-router';
 import { parseISO } from 'date-fns';
 import { useAuth } from '../../../src/context/AuthContext';
@@ -21,6 +20,7 @@ import { ReminderPicker } from '../../../src/components/ReminderPicker';
 import { useGroupMembers } from '../../../src/hooks/useGroupMembers';
 import { updateItem } from '../../../src/services/items';
 import { colors, spacing, itemTypeConfig, itemTypeSupportsRecurring } from '../../../src/constants/theme';
+import { itemFormLayout } from '../../../src/constants/itemFormLayout';
 import {
   ItemType,
   ItemVisibility,
@@ -33,6 +33,8 @@ import { normalizeReminderOffset, resolveItemReminderOffset } from '../../../src
 import { toISODateTime } from '../../../src/utils/dates';
 import { getItemTags } from '../../../src/utils/tags';
 import { dismissItemFlow } from '../../../src/utils/navigation';
+import { ItemFormScreen } from '../../../src/components/ItemFormScreen';
+import { HeaderSaveButton } from '../../../src/components/HeaderSaveButton';
 
 export default function EditItemScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -40,6 +42,7 @@ export default function EditItemScreen() {
   const { items, groups } = useApp();
 
   const item = useMemo(() => items.find((i) => i.id === id), [items, id]);
+  const isOwner = item?.createdBy === user?.id;
   const itemGroup = groups.find((g) => g.id === item?.groupId);
   const { members: groupMembers } = useGroupMembers(itemGroup?.members ?? []);
   const visibilityMembers = useMemo(
@@ -89,6 +92,61 @@ export default function EditItemScreen() {
     }
   };
 
+  const handleSave = useCallback(async () => {
+    if (!item) return;
+    if (!title.trim()) {
+      appAlert('Error', 'Title is required');
+      return;
+    }
+    if (visibility === 'custom' && allowedMembers.length === 0) {
+      appAlert('Error', 'Select at least one member for custom visibility');
+      return;
+    }
+    setLoading(true);
+    try {
+      await updateItem(
+        item.id,
+        {
+          title: title.trim(),
+          notes: notes.trim(),
+          type,
+          visibility,
+          allowedMembers: visibility === 'custom' ? allowedMembers : [],
+          assignedTo,
+          recurringRule: itemTypeSupportsRecurring(type)
+            ? recurringRule
+            : DEFAULT_RECURRING_RULE,
+          tags,
+          dateTime: hasDate ? toISODateTime(dateTime) : null,
+          reminderOffset: normalizeReminderOffset(hasDate, type, reminderOffset),
+        },
+        user?.id
+      );
+      dismissItemFlow();
+    } catch (error: unknown) {
+      appAlert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to update item'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    item,
+    title,
+    notes,
+    type,
+    visibility,
+    allowedMembers,
+    assignedTo,
+    recurringRule,
+    tags,
+    hasDate,
+    dateTime,
+    reminderOffset,
+    user?.id,
+  ]);
+
   if (!item) {
     return (
       <View style={styles.notFound}>
@@ -97,8 +155,6 @@ export default function EditItemScreen() {
       </View>
     );
   }
-
-  const isOwner = item.createdBy === user?.id;
 
   if (!isOwner) {
     return (
@@ -109,46 +165,12 @@ export default function EditItemScreen() {
     );
   }
 
-  const handleSave = async () => {
-    if (!title.trim()) {
-      Alert.alert('Error', 'Title is required');
-      return;
-    }
-    if (visibility === 'custom' && allowedMembers.length === 0) {
-      Alert.alert('Error', 'Select at least one member for custom visibility');
-      return;
-    }
-    setLoading(true);
-    try {
-      await updateItem(item.id, {
-        title: title.trim(),
-        notes: notes.trim(),
-        type,
-        visibility,
-        allowedMembers: visibility === 'custom' ? allowedMembers : [],
-        assignedTo,
-        recurringRule: itemTypeSupportsRecurring(type)
-          ? recurringRule
-          : DEFAULT_RECURRING_RULE,
-        tags,
-        dateTime: hasDate ? toISODateTime(dateTime) : null,
-        reminderOffset: normalizeReminderOffset(hasDate, type, reminderOffset),
-      });
-      dismissItemFlow();
-    } catch (error: unknown) {
-      Alert.alert(
-        'Error',
-        error instanceof Error ? error.message : 'Failed to update item'
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
-    <KeyboardAwareScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
+    <ItemFormScreen
+      title="Edit Item"
+      rightAction={
+        <HeaderSaveButton onPress={handleSave} loading={loading} />
+      }
     >
       {itemGroup && (
         <GroupPicker
@@ -215,25 +237,16 @@ export default function EditItemScreen() {
         numberOfLines={3}
         style={styles.notesInput}
       />
-      <Button title="Save" onPress={handleSave} loading={loading} />
-    </KeyboardAwareScrollView>
+    </ItemFormScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
-  },
   notFound: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.lg,
+    padding: itemFormLayout.horizontalPadding,
   },
   notFoundText: {
     fontSize: 16,

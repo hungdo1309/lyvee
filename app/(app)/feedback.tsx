@@ -4,11 +4,11 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Alert,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { appAlert } from '../../src/utils/dialog';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/context/AuthContext';
@@ -38,7 +38,7 @@ export default function FeedbackScreen() {
     if (!validate() || !user || !screenName) return;
 
     if (!isFirebaseConfigured()) {
-      Alert.alert(
+      appAlert(
         'Firebase not configured',
         'Feedback cannot be sent until Firebase is set up.'
       );
@@ -54,11 +54,11 @@ export default function FeedbackScreen() {
         screenName,
         message,
       });
-      Alert.alert('Thank you', 'Your feedback has been sent.', [
+      appAlert('Thank you', 'Your feedback has been sent.', [
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (error: unknown) {
-      Alert.alert(
+      appAlert(
         'Could not send',
         error instanceof Error ? error.message : 'Failed to send feedback'
       );

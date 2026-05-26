@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { appAlert } from '../src/utils/dialog';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
 import { useApp } from '../src/context/AppContext';
@@ -16,7 +17,7 @@ export default function JoinScreen() {
     if (authLoading || joining) return;
 
     if (!code) {
-      Alert.alert('Invalid link', 'No invite code found.', [
+      appAlert('Invalid link', 'No invite code found.', [
         { text: 'OK', onPress: () => router.replace('/(auth)/login') },
       ]);
       return;
@@ -34,7 +35,7 @@ export default function JoinScreen() {
         router.replace('/(app)/(tabs)' as Href);
       })
       .catch((error: unknown) => {
-        Alert.alert(
+        appAlert(
           'Could not join',
           error instanceof Error ? error.message : 'Invalid invite',
           [{ text: 'OK', onPress: () => router.replace('/(app)/(tabs)' as Href) }]

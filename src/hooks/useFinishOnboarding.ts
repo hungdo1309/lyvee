@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
-import { Alert } from 'react-native';
 import { router, type Href } from 'expo-router';
 import { useApp } from '../context/AppContext';
+import { appAlert } from '../utils/dialog';
 
 export function useFinishOnboarding() {
   const { selectGroup, completeOnboarding } = useApp();
@@ -16,7 +16,7 @@ export function useFinishOnboarding() {
         await completeOnboarding();
         router.replace('/(app)/(tabs)' as Href);
       } catch (error: unknown) {
-        Alert.alert(
+        appAlert(
           'Error',
           error instanceof Error ? error.message : 'Could not continue'
         );

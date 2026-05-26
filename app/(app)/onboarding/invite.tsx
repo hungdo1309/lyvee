@@ -17,7 +17,7 @@ import {
   subscribeToGroup,
   buildInviteMessage,
   ensureGroupInvite,
-  isGroupOwner,
+  canManageGroup,
 } from '../../../src/services/groups';
 import { colors, layout, spacing, typography } from '../../../src/constants/theme';
 import { onboardingStepLabel } from '../../../src/constants/onboarding';
@@ -34,7 +34,7 @@ export default function OnboardingInviteScreen() {
     const unsubscribe = subscribeToGroup(groupId, (fetched) => {
       setGroup(fetched);
       setLoading(false);
-      if (fetched && user && isGroupOwner(fetched, user.id)) {
+      if (fetched && user && canManageGroup(fetched, user.id)) {
         ensureGroupInvite(fetched).catch(() => {});
       }
     });
@@ -67,7 +67,7 @@ export default function OnboardingInviteScreen() {
     );
   }
 
-  const isOwner = user ? isGroupOwner(group, user.id) : false;
+  const canInvite = user ? canManageGroup(group, user.id) : false;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -83,7 +83,7 @@ export default function OnboardingInviteScreen() {
       </View>
 
       <View style={styles.body}>
-        {isOwner ? (
+        {canInvite ? (
           <Card style={styles.inviteCard}>
             <Text style={styles.inviteLabel}>Invite code</Text>
             <TouchableOpacity onPress={handleShare} activeOpacity={0.7}>
@@ -101,7 +101,7 @@ export default function OnboardingInviteScreen() {
       </View>
 
       <View style={styles.footer}>
-        {isOwner && (
+        {canInvite && (
           <Button
             title="Share Invite"
             variant="secondary"
