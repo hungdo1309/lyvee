@@ -11,12 +11,12 @@ import { useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../../src/context/AuthContext';
 import { useApp } from '../../../src/context/AppContext';
 import { Input } from '../../../src/components/Input';
-import { Button } from '../../../src/components/Button';
 import { ItemFormOptions, ItemTypePicker } from '../../../src/components/ItemFormOptions';
 import { TagInput } from '../../../src/components/TagInput';
 import { ItemDateTimeField } from '../../../src/components/ItemDateTimeField';
 import { GroupPicker } from '../../../src/components/GroupPicker';
 import { ReminderPicker } from '../../../src/components/ReminderPicker';
+import { HeaderSaveButton } from '../../../src/components/HeaderSaveButton';
 import { useGroupMembers } from '../../../src/hooks/useGroupMembers';
 import { createItem } from '../../../src/services/items';
 import { dismissItemFlow } from '../../../src/utils/navigation';
@@ -143,7 +143,16 @@ export default function CreateItemScreen() {
   };
 
   return (
-    <ItemFormScreen title="New Item">
+    <ItemFormScreen
+      title="New Item"
+      rightAction={
+        <HeaderSaveButton
+          label="Create"
+          onPress={handleCreate}
+          loading={loading}
+        />
+      }
+    >
       {groups.length > 0 && (
         <GroupPicker
           groupId={groupId}
@@ -230,8 +239,6 @@ export default function CreateItemScreen() {
         numberOfLines={3}
         style={styles.notesInput}
       />
-
-      <Button title="Create" onPress={handleCreate} loading={loading} size="lg" />
     </ItemFormScreen>
   );
 }

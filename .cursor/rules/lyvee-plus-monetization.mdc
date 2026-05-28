@@ -1,0 +1,35 @@
+---
+description: LyVee monetization and Plus launch — grandfathering, free tier, reminders
+alwaysApply: true
+---
+
+# LyVee Plus & monetization (owner decisions)
+
+When the user works on billing, subscriptions, paywalls, RevenueCat, `billing.ts`, or asks about making money with LyVee, **remind them of this plan** unless they explicitly change it.
+
+## Primary model
+
+- **Free + optional LyVee Plus** (not affiliate links in item creation; not ads).
+- Free tier should stay **complete for one typical household** (e.g. 1 group, ~4–6 members, core tasks/calendar/documents/reminders).
+- Plus charges for **expansion and power**, not basics: extra groups, more members, advanced reminders, etc.
+- Target pricing ballpark: ~$4–8/mo or ~$30–50/yr per group/household.
+
+## Affiliate links
+
+- **Do not** suggest keyword-triggered affiliate links in item create flow as monetization. Poor fit for trust in a household app.
+
+## Grandfathering (critical — do not forget)
+
+When Plus launches, **never punish early adopters**:
+
+1. **Grandfather existing resources** — groups/members users already have stay fully usable (read/write).
+2. **Limit only new creation** — e.g. can't create a 4th group or invite a 9th member on free after launch; existing over-limit setup stays.
+3. **Never** auto-delete groups, remove members, or read-lock existing data because of new free caps.
+4. Optional: `plan: 'legacy_free' | 'free' | 'plus'` on user/group; backfill pre-launch users as `legacy_free`, or grandfather by `createdAt` before launch date.
+5. Announce changes clearly once; no surprise paywall on login.
+
+## Launch-now guidance
+
+- Ship free now; add Plus when one premium feature is obvious.
+- Wire billing via RevenueCat (or similar); `src/services/billing.ts` already stubs group billing cancel on group delete.
+- Revenue expectation: most users stay free forever; 2–5% may upgrade.
