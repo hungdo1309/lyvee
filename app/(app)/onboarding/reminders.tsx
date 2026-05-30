@@ -1,13 +1,14 @@
 import React from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import {
-  OnboardingFeatureRow,
+  OnboardingBulletRow,
   OnboardingStepLayout,
 } from '../../../src/components/onboarding/OnboardingStepLayout';
 import {
   ONBOARDING_FINISH_LABEL,
   ONBOARDING_REMINDER_FEATURES,
   ONBOARDING_REMINDERS_SUBTITLE,
+  ONBOARDING_REMINDERS_TITLE,
   getOnboardingTourStepProps,
   normalizeOnboardingGroupId,
 } from '../../../src/constants/onboarding';
@@ -16,13 +17,13 @@ import { useFinishOnboarding } from '../../../src/hooks/useFinishOnboarding';
 export default function OnboardingRemindersScreen() {
   const params = useLocalSearchParams<{ groupId?: string | string[] }>();
   const groupId = normalizeOnboardingGroupId(params.groupId);
-  const stepProps = getOnboardingTourStepProps(4, groupId);
+  const stepProps = getOnboardingTourStepProps(4);
   const { finish, finishing } = useFinishOnboarding();
 
   return (
     <OnboardingStepLayout
       {...stepProps}
-      title="Reminders"
+      title={ONBOARDING_REMINDERS_TITLE}
       subtitle={ONBOARDING_REMINDERS_SUBTITLE}
       onContinue={() => finish(groupId)}
       continueLabel={ONBOARDING_FINISH_LABEL}
@@ -32,7 +33,7 @@ export default function OnboardingRemindersScreen() {
       groupId={groupId}
     >
       {ONBOARDING_REMINDER_FEATURES.map((feature) => (
-        <OnboardingFeatureRow
+        <OnboardingBulletRow
           key={feature.title}
           icon={feature.icon}
           title={feature.title}

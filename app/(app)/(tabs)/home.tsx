@@ -33,6 +33,7 @@ import {
   ItemInstance,
   buildHomeUpcomingDaySections,
   getUpcomingWindowInstances,
+  HOME_UPCOMING_DAYS,
   isCalendarInstanceActive,
 } from '../../../src/utils/itemInstances';
 import { colors, layout, radius, spacing, typography } from '../../../src/constants/theme';
@@ -78,7 +79,9 @@ export default function HomeScreen() {
   );
 
   const daySections = useMemo(() => {
-    const instances = getUpcomingWindowInstances(filteredItems);
+    const instances = getUpcomingWindowInstances(filteredItems, HOME_UPCOMING_DAYS, {
+      includeExpired: true,
+    });
     return buildHomeUpcomingDaySections(instances);
   }, [filteredItems]);
 

@@ -20,6 +20,7 @@ export default function AppLayout() {
       <Stack.Screen name="feedback" />
       <Stack.Screen name="change-email" />
       <Stack.Screen name="change-password" />
+      <Stack.Screen name="set-password" />
     </Stack>
   );
 }

@@ -127,19 +127,19 @@ export interface Feedback {
 export const FEEDBACK_SCREEN_CATEGORIES = [
   {
     title: 'Main tabs',
-    screens: ['Home', 'Calendar', 'Groups', 'All Items', 'Settings'],
+    screens: ['Home', 'Calendar', 'Groups', 'Settings'],
   },
   {
     title: 'Items',
-    screens: ['Create Item', 'Edit Item'],
+    screens: ['Create Item', 'Item Detail', 'Edit Item', 'All Items'],
   },
   {
     title: 'Groups',
-    screens: ['Group Detail', 'Select Group'],
+    screens: ['Group Detail', 'Create Group', 'Join Group', 'Join via Invite Link'],
   },
   {
-    title: 'Getting started',
-    screens: ['Onboarding'],
+    title: 'Account',
+    screens: ['Sign In', 'Change Email', 'Change Password'],
   },
   {
     title: 'General',

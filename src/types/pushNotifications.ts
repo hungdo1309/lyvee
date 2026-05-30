@@ -12,7 +12,8 @@ export type PushNotificationType =
   | 'item.deleted'
   | 'item.completed'
   | 'item.comment.mention'
-  | 'item.comment.reply';
+  | 'item.comment.reply'
+  | 'item.comment.reaction';
 
 export interface PushNotificationData {
   type: PushNotificationType;
@@ -20,6 +21,8 @@ export interface PushNotificationData {
   itemId?: string;
   commentId?: string;
   occurrence?: string;
+  reaction?: string;
+  notificationId?: string;
 }
 
 export interface PushEventInput {

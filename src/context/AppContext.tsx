@@ -8,7 +8,10 @@ import React, {
   useMemo,
 } from 'react';
 import { subscribeToUserGroups } from '../services/groups';
-import { createAllUserItemsSubscription } from '../services/items';
+import {
+  fetchItemsForGroups,
+  subscribeToGroupItems,
+} from '../services/items';
 import { syncItemNotifications } from '../services/notifications';
 import {
   saveActiveGroupSession,
@@ -37,6 +40,20 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null);
 const EMPTY_GROUP_ITEMS: Item[] = [];
+const REMINDER_SYNC_DEBOUNCE_MS = 3000;
+
+function mergeItemsFromCache(itemsByGroup: Map<string, Item[]>): Item[] {
+  const merged: Item[] = [];
+  for (const groupItems of itemsByGroup.values()) {
+    merged.push(...groupItems);
+  }
+  return merged.sort((left, right) => {
+    if (!left.dateTime && !right.dateTime) return 0;
+    if (!left.dateTime) return 1;
+    if (!right.dateTime) return -1;
+    return left.dateTime.localeCompare(right.dateTime);
+  });
+}
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { user, firebaseUser } = useAuth();
@@ -50,9 +67,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [itemsReady, setItemsReady] = useState(false);
   const userPickedGroupRef = useRef(false);
   const initialGroupAppliedRef = useRef(false);
-  const itemsSubscriptionRef = useRef<ReturnType<
-    typeof createAllUserItemsSubscription
-  > | null>(null);
+  const itemsByGroupRef = useRef<Map<string, Item[]>>(new Map());
+  const reminderSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const groupIdsKey = useMemo(
     () => groups.map((group) => group.id).sort().join(','),
@@ -64,6 +80,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [groupIdsKey]
   );
 
+  const publishItems = useCallback(
+    (nextItems: Item[]) => {
+      setItems(nextItems);
+
+      if (!user) return;
+      if (reminderSyncTimeoutRef.current) {
+        clearTimeout(reminderSyncTimeoutRef.current);
+      }
+      reminderSyncTimeoutRef.current = setTimeout(() => {
+        void syncItemNotifications(nextItems, user.id);
+      }, REMINDER_SYNC_DEBOUNCE_MS);
+    },
+    [user]
+  );
+
+  const updateCachedGroupItems = useCallback(
+    (groupId: string, groupItems: Item[]) => {
+      itemsByGroupRef.current.set(groupId, groupItems);
+      publishItems(mergeItemsFromCache(itemsByGroupRef.current));
+    },
+    [publishItems]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (reminderSyncTimeoutRef.current) {
+        clearTimeout(reminderSyncTimeoutRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (!user) {
       setGroups([]);
@@ -74,6 +121,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setSessionLoaded(false);
       setGroupsLoaded(false);
       setItemsReady(false);
+      itemsByGroupRef.current = new Map();
       userPickedGroupRef.current = false;
       initialGroupAppliedRef.current = false;
       return;
@@ -103,41 +151,46 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [user, firebaseUser]);
 
   useEffect(() => {
-    if (!user || !firebaseUser) {
-      itemsSubscriptionRef.current?.destroy();
-      itemsSubscriptionRef.current = null;
-      return;
-    }
-
-    const subscription = createAllUserItemsSubscription(user.id, (fetched) => {
-      setItems(fetched);
-      setItemsReady(true);
-      syncItemNotifications(fetched, user.id);
-    });
-    itemsSubscriptionRef.current = subscription;
-
-    return () => {
-      subscription.destroy();
-      itemsSubscriptionRef.current = null;
-    };
-  }, [user, firebaseUser]);
-
-  useEffect(() => {
     if (!user || !firebaseUser) return;
 
-    const subscription = itemsSubscriptionRef.current;
-    if (!subscription) return;
-
     if (groupIds.length === 0) {
-      subscription.setGroupIds([]);
-      setItems([]);
+      itemsByGroupRef.current = new Map();
+      publishItems([]);
       setItemsReady(true);
       return;
     }
 
+    let active = true;
     setItemsReady(false);
-    subscription.setGroupIds(groupIds);
-  }, [user, firebaseUser, groupIdsKey]);
+
+    fetchItemsForGroups(groupIds, user.id)
+      .then((fetchedByGroup) => {
+        if (!active) return;
+        itemsByGroupRef.current = fetchedByGroup;
+        publishItems(mergeItemsFromCache(fetchedByGroup));
+        setItemsReady(true);
+      })
+      .catch((error) => {
+        console.warn('[AppContext] fetchItemsForGroups:', error);
+        if (active) {
+          setItemsReady(true);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user, firebaseUser, groupIdsKey, publishItems]);
+
+  useEffect(() => {
+    if (!user || !firebaseUser || !activeGroupId) return;
+
+    const unsub = subscribeToGroupItems(activeGroupId, user.id, (groupItems) => {
+      updateCachedGroupItems(activeGroupId, groupItems);
+    });
+
+    return unsub;
+  }, [user, firebaseUser, activeGroupId, updateCachedGroupItems]);
 
   useEffect(() => {
     if (!user || !sessionLoaded || !groupsLoaded || !itemsReady) return;

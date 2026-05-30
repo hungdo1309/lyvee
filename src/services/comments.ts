@@ -23,6 +23,7 @@ import {
   notifyCommentReply,
   notifyNewCommentMentions,
 } from './commentNotifications';
+import { deleteReactionsForComment, normalizeReactionCounts } from './commentReactions';
 
 function commentsCollection(itemId: string) {
   return collection(db, 'items', itemId, 'comments');
@@ -81,6 +82,7 @@ function mapComment(id: string, data: Record<string, unknown>): ItemComment {
       ? (data.mentionUserIds as string[])
       : [],
     mentionEveryone: Boolean(data.mentionEveryone),
+    reactionCounts: normalizeReactionCounts(data.reactionCounts),
     createdAt: normalizeCommentIso(data.createdAt),
     updatedAt: normalizeCommentIso(data.updatedAt),
     editedAt: data.editedAt ? normalizeCommentIso(data.editedAt) : undefined,
@@ -88,6 +90,7 @@ function mapComment(id: string, data: Record<string, unknown>): ItemComment {
 }
 
 export const COMMENTS_FETCH_PAGE_SIZE = 50;
+export const COMMENT_THREAD_REPLY_LIMIT = 100;
 
 export interface ItemCommentsPage {
   comments: ItemComment[];
@@ -221,7 +224,11 @@ export async function fetchCommentsForFocus(
   }
 
   const repliesSnapshot = await getDocs(
-    query(commentsCollection(itemId), where('threadRootId', '==', rootId))
+    query(
+      commentsCollection(itemId),
+      where('threadRootId', '==', rootId),
+      limit(COMMENT_THREAD_REPLY_LIMIT)
+    )
   );
 
   for (const docSnap of repliesSnapshot.docs) {
@@ -267,12 +274,16 @@ export async function createItemComment(
   await setDoc(doc(db, 'items', item.id, 'comments', id), comment);
 
   const actor = await getUserProfile(authorId);
+  const mentionExcludeRecipientIds =
+    parentComment && parentComment.authorId !== authorId ? [parentComment.authorId] : [];
+
   await notifyCommentMentions(
     item,
     comment,
     groupMemberIds,
     authorId,
-    actor?.name ?? 'Someone'
+    actor?.name ?? 'Someone',
+    mentionExcludeRecipientIds
   );
 
   if (parentComment) {
@@ -332,13 +343,25 @@ export async function updateItemComment(
   );
 
   const actor = await getUserProfile(authorId);
+  let mentionExcludeRecipientIds: string[] = [];
+  if (comment.parentCommentId) {
+    const parentSnap = await getDoc(
+      doc(db, 'items', item.id, 'comments', comment.parentCommentId)
+    );
+    const parentAuthorId = parentSnap.data()?.authorId;
+    if (typeof parentAuthorId === 'string' && parentAuthorId !== authorId) {
+      mentionExcludeRecipientIds = [parentAuthorId];
+    }
+  }
+
   await notifyNewCommentMentions(
     item,
     nextComment,
     groupMemberIds,
     authorId,
     actor?.name ?? 'Someone',
-    previous
+    previous,
+    mentionExcludeRecipientIds
   );
 }
 
@@ -361,16 +384,24 @@ export async function deleteItemComment(
 
   for (let i = 0; i < commentsToDelete.length; i += FIRESTORE_BATCH_LIMIT) {
     const batch = writeBatch(db);
-    commentsToDelete.slice(i, i + FIRESTORE_BATCH_LIMIT).forEach((entry) => {
+    for (const entry of commentsToDelete.slice(i, i + FIRESTORE_BATCH_LIMIT)) {
       batch.delete(doc(db, 'items', itemId, 'comments', entry.id));
-    });
+    }
     await batch.commit();
   }
+
+  await Promise.all(
+    commentsToDelete.map((entry) => deleteReactionsForComment(itemId, entry.id))
+  );
 }
 
 export async function deleteCommentsForItem(itemId: string): Promise<void> {
   const snapshot = await getDocs(commentsCollection(itemId));
   if (snapshot.empty) return;
+
+  await Promise.all(
+    snapshot.docs.map((docSnap) => deleteReactionsForComment(itemId, docSnap.id))
+  );
 
   for (let i = 0; i < snapshot.docs.length; i += FIRESTORE_BATCH_LIMIT) {
     const batch = writeBatch(db);

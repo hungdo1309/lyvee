@@ -5,6 +5,7 @@ import { OnboardingStepLayout } from '../../../src/components/onboarding/Onboard
 import {
   ONBOARDING_ITEM_TYPES,
   ONBOARDING_ITEM_TYPES_SUBTITLE,
+  ONBOARDING_ITEM_TYPES_TITLE,
   buildOnboardingHref,
   getOnboardingItemTypeColor,
   getOnboardingItemTypeLabel,
@@ -16,18 +17,16 @@ import { colors, spacing, itemTypeConfig } from '../../../src/constants/theme';
 export default function OnboardingItemTypesScreen() {
   const params = useLocalSearchParams<{ groupId?: string | string[] }>();
   const groupId = normalizeOnboardingGroupId(params.groupId);
-  const stepProps = getOnboardingTourStepProps(1, groupId);
-
-  const goNext = () => {
-    router.push(buildOnboardingHref('/(app)/onboarding/calendar', groupId));
-  };
+  const stepProps = getOnboardingTourStepProps(1);
 
   return (
     <OnboardingStepLayout
       {...stepProps}
-      title="Three ways to plan"
+      title={ONBOARDING_ITEM_TYPES_TITLE}
       subtitle={ONBOARDING_ITEM_TYPES_SUBTITLE}
-      onContinue={goNext}
+      onContinue={() =>
+        router.push(buildOnboardingHref('/(app)/onboarding/calendar', groupId))
+      }
       tourSkip
       groupId={groupId}
     >

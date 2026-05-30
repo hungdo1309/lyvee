@@ -8,7 +8,7 @@ import { Button } from '../Button';
 import { colors, layout, spacing, typography } from '../../constants/theme';
 import {
   ONBOARDING_TOUR_EXIT_LABEL,
-  ONBOARDING_TOTAL_STEPS,
+  ONBOARDING_TOUR_STEPS,
 } from '../../constants/onboarding';
 import { useFinishOnboarding } from '../../hooks/useFinishOnboarding';
 
@@ -17,21 +17,24 @@ interface OnboardingProgressHeaderProps {
   title: string;
   subtitle: string;
   totalSteps?: number;
+  stepLabel?: string;
 }
 
 export function OnboardingProgressHeader({
   step,
   title,
   subtitle,
-  totalSteps = ONBOARDING_TOTAL_STEPS,
+  totalSteps,
+  stepLabel,
 }: OnboardingProgressHeaderProps) {
+  const resolvedTotal = totalSteps ?? ONBOARDING_TOUR_STEPS;
+  const label = stepLabel ?? `Step ${step} of ${resolvedTotal}`;
+
   return (
     <View style={styles.header}>
-      <Text style={styles.step}>
-        Step {step} of {totalSteps}
-      </Text>
+      <Text style={styles.step}>{label}</Text>
       <View style={styles.progressRow}>
-        {Array.from({ length: totalSteps }, (_, index) => (
+        {Array.from({ length: resolvedTotal }, (_, index) => (
           <View
             key={index}
             style={[
@@ -55,15 +58,13 @@ interface OnboardingStepLayoutProps {
   children: ReactNode;
   onContinue: () => void;
   continueLabel?: string;
-  onSkip?: () => void;
-  skipLabel?: string;
-  tourSkip?: boolean;
   groupId?: string;
   loading?: boolean;
   showBack?: boolean;
-  footerExtra?: ReactNode;
-  preserveContinueTitle?: boolean;
+  tourSkip?: boolean;
   totalSteps?: number;
+  stepLabel?: string;
+  preserveContinueTitle?: boolean;
 }
 
 export function OnboardingStepLayout({
@@ -73,20 +74,15 @@ export function OnboardingStepLayout({
   children,
   onContinue,
   continueLabel = 'Continue',
-  onSkip,
-  skipLabel,
-  tourSkip = false,
   groupId,
   loading = false,
   showBack = true,
-  footerExtra,
-  preserveContinueTitle = false,
+  tourSkip = false,
   totalSteps,
+  stepLabel,
+  preserveContinueTitle = false,
 }: OnboardingStepLayoutProps) {
   const { finish, finishing } = useFinishOnboarding();
-  const resolvedSkipLabel =
-    skipLabel ?? (tourSkip ? ONBOARDING_TOUR_EXIT_LABEL : 'Skip for now');
-  const handleSkip = tourSkip ? () => finish(groupId) : onSkip;
   const isBusy = loading || finishing;
 
   return (
@@ -102,6 +98,7 @@ export function OnboardingStepLayout({
         title={title}
         subtitle={subtitle}
         totalSteps={totalSteps}
+        stepLabel={stepLabel}
       />
 
       <ScrollView
@@ -113,7 +110,6 @@ export function OnboardingStepLayout({
       </ScrollView>
 
       <View style={styles.footer}>
-        {footerExtra}
         <Button
           title={continueLabel}
           size="lg"
@@ -122,13 +118,13 @@ export function OnboardingStepLayout({
           disabled={isBusy}
           preserveTitle={preserveContinueTitle}
         />
-        {handleSkip ? (
+        {tourSkip ? (
           <Button
-            title={resolvedSkipLabel}
+            title={ONBOARDING_TOUR_EXIT_LABEL}
             variant="ghost"
-            onPress={handleSkip}
+            onPress={() => finish(groupId)}
             disabled={isBusy}
-            preserveTitle={tourSkip}
+            preserveTitle
             style={styles.skip}
           />
         ) : null}
@@ -137,25 +133,25 @@ export function OnboardingStepLayout({
   );
 }
 
-interface OnboardingFeatureRowProps {
+interface OnboardingBulletRowProps {
   icon: ComponentProps<typeof Ionicons>['name'];
   title: string;
   description: string;
 }
 
-export function OnboardingFeatureRow({
+export function OnboardingBulletRow({
   icon,
   title,
   description,
-}: OnboardingFeatureRowProps) {
+}: OnboardingBulletRowProps) {
   return (
-    <View style={styles.featureRow}>
-      <View style={styles.featureIconWrap}>
+    <View style={styles.bulletRow}>
+      <View style={styles.bulletIconWrap}>
         <Ionicons name={icon} size={22} color={colors.primary} />
       </View>
-      <View style={styles.featureCopy}>
-        <Text style={styles.featureTitle}>{title}</Text>
-        <Text style={styles.featureDescription}>{description}</Text>
+      <View style={styles.bulletCopy}>
+        <Text style={styles.bulletTitle}>{title}</Text>
+        <Text style={styles.bulletDescription}>{description}</Text>
       </View>
     </View>
   );
@@ -221,7 +217,7 @@ const styles = StyleSheet.create({
   skip: {
     marginTop: spacing.sm,
   },
-  featureRow: {
+  bulletRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,
@@ -231,7 +227,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderLight,
     padding: spacing.md,
   },
-  featureIconWrap: {
+  bulletIconWrap: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -239,16 +235,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  featureCopy: {
+  bulletCopy: {
     flex: 1,
     gap: 4,
   },
-  featureTitle: {
+  bulletTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
   },
-  featureDescription: {
+  bulletDescription: {
     fontSize: 14,
     color: colors.textSecondary,
     lineHeight: 20,

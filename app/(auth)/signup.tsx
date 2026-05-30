@@ -10,21 +10,28 @@ import {
 import { appAlert } from '../../src/utils/dialog';
 import { Link, router, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '../../src/context/AuthContext';
+import {
+  GoogleAccountLinkError,
+  GoogleSignInCancelledError,
+  useAuth,
+} from '../../src/context/AuthContext';
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
+import { AuthDivider } from '../../src/components/AuthDivider';
+import { GoogleSignInButton } from '../../src/components/GoogleSignInButton';
 import { PasswordStrengthIndicator } from '../../src/components/PasswordStrengthIndicator';
 import { PasswordRequirementsChecklist } from '../../src/components/PasswordRequirementsChecklist';
 import { PasswordChecklist } from '../../src/components/PasswordChecklist';
 import { colors, spacing, typography } from '../../src/constants/theme';
 import { isFirebaseConfigured } from '../../src/config/firebase';
+import { isGoogleSignInAvailable, isGoogleSignInConfigured } from '../../src/config/googleSignIn';
 import {
   getPasswordMatchRequirement,
   validatePassword,
 } from '../../src/utils/passwordValidation';
 
 export default function SignUpScreen() {
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -33,6 +40,7 @@ export default function SignUpScreen() {
   const [showConfirmChecks, setShowConfirmChecks] = useState(false);
   const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [errors, setErrors] = useState<{
     name?: string;
     email?: string;
@@ -93,6 +101,47 @@ export default function SignUpScreen() {
       appAlert('Sign up failed', message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleSignUp = async () => {
+    if (!isFirebaseConfigured()) {
+      appAlert(
+        'Firebase not configured',
+        'Copy .env.example to .env and add your Firebase credentials.'
+      );
+      return;
+    }
+
+    if (!isGoogleSignInAvailable()) {
+      appAlert(
+        'Google Sign-In not available',
+        'Install a LyVee preview or production build to sign in with Google. Expo Go is not supported.'
+      );
+      return;
+    }
+
+    setGoogleLoading(true);
+    try {
+      await loginWithGoogle();
+      router.replace('/(app)' as Href);
+    } catch (error: unknown) {
+      if (error instanceof GoogleSignInCancelledError) {
+        return;
+      }
+      if (error instanceof GoogleAccountLinkError) {
+        appAlert(
+          'Account already exists',
+          'Sign in with your password on the login screen to link Google to your account.'
+        );
+        router.replace('/(auth)/login' as Href);
+        return;
+      }
+      const message =
+        error instanceof Error ? error.message : 'Failed to sign up with Google';
+      appAlert('Google sign up failed', message);
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -170,14 +219,26 @@ export default function SignUpScreen() {
                 items={[getPasswordMatchRequirement(password, confirmPassword)]}
               />
             </View>
+          </View>
+
+          <View style={styles.authActions}>
             <Button
               title="Create Account"
               onPress={handleSignUp}
               loading={loading}
               disabled={!canSubmit}
               size="lg"
-              style={styles.button}
             />
+            {isGoogleSignInConfigured() ? (
+              <>
+                <AuthDivider />
+                <GoogleSignInButton
+                  onPress={handleGoogleSignUp}
+                  loading={googleLoading}
+                  disabled={loading}
+                />
+              </>
+            ) : null}
           </View>
 
           <View style={styles.footer}>
@@ -218,6 +279,11 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   form: {
+    marginBottom: 0,
+  },
+  authActions: {
+    gap: spacing.md,
+    marginTop: spacing.sm,
     marginBottom: spacing.lg,
   },
   passwordField: {

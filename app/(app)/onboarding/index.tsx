@@ -20,7 +20,6 @@ export default function OnboardingWelcomeScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.content}>
         <AppLogoHeader tagline={ONBOARDING_WELCOME_TAGLINE} iconSize={88} />
-
         <Text style={styles.subtitle}>{ONBOARDING_WELCOME_SUBTITLE}</Text>
 
         <View style={styles.steps}>

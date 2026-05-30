@@ -39,7 +39,6 @@ import {
 import { dismissItemFlow } from '../../../src/utils/navigation';
 import { ItemFormScreen } from '../../../src/components/ItemFormScreen';
 import { HeaderSaveButton } from '../../../src/components/HeaderSaveButton';
-import { HeaderDeleteButton } from '../../../src/components/HeaderDeleteButton';
 import { HeaderCancelButton } from '../../../src/components/HeaderCancelButton';
 import { ScreenBackButton } from '../../../src/components/ScreenBackButton';
 import { ItemComments } from '../../../src/components/ItemComments';
@@ -127,7 +126,7 @@ export default function ItemDetailScreen() {
       `"${item.title}" will be permanently removed and can't be recovered.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete item', style: 'destructive', onPress: handleDelete },
+        { text: 'Delete', style: 'destructive', onPress: handleDelete },
       ]
     );
   }, [item, canEdit, handleDelete]);
@@ -238,13 +237,7 @@ export default function ItemDetailScreen() {
         isEditing ? (
           <HeaderSaveButton onPress={handleSave} loading={loading} />
         ) : canEdit ? (
-          <View style={styles.headerActions}>
-            <HeaderDeleteButton
-              onPress={handleDeletePress}
-              loading={deleting}
-            />
-            <HeaderSaveButton label="Edit" onPress={() => setIsEditing(true)} />
-          </View>
+          <HeaderSaveButton label="Edit" onPress={() => setIsEditing(true)} />
         ) : undefined
       }
     >
@@ -333,7 +326,20 @@ export default function ItemDetailScreen() {
         groupMemberIds={itemGroup?.members ?? []}
         currentUserId={user?.id}
         focusCommentId={typeof commentId === 'string' ? commentId : undefined}
+        compactBottom={canEdit && !isEditing}
       />
+      {canEdit && !isEditing ? (
+        <View style={styles.deleteSection}>
+          <Button
+            title="Delete"
+            variant="cancel"
+            onPress={handleDeletePress}
+            loading={deleting}
+            disabled={deleting}
+            style={styles.deleteButton}
+          />
+        </View>
+      ) : null}
     </ItemFormScreen>
   );
 }
@@ -354,10 +360,12 @@ const styles = StyleSheet.create({
   headerBackButton: {
     marginBottom: 0,
   },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+  deleteSection: {
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  deleteButton: {
+    alignSelf: 'stretch',
   },
   dateSection: {
     marginBottom: spacing.md,

@@ -29,6 +29,7 @@ import { Group } from '../../../src/types';
 import { colors, layout, spacing, typography } from '../../../src/constants/theme';
 import {
   ONBOARDING_GROUP_SUBTITLE,
+  ONBOARDING_SKIP_LABEL,
   buildOnboardingHref,
   buildOnboardingInviteHref,
   getOnboardingSetupStepProps,
@@ -199,7 +200,11 @@ export default function OnboardingGroupScreen() {
         </ScrollView>
 
         <View style={styles.footer}>
-          <Button title="Skip for now" variant="ghost" onPress={() => goToTour()} />
+          <Button
+            title={ONBOARDING_SKIP_LABEL}
+            variant="ghost"
+            onPress={() => goToTour()}
+          />
         </View>
       </KeyboardAvoidingScreen>
     </SafeAreaView>

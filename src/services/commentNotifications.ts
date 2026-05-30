@@ -11,10 +11,14 @@ import { enqueuePushEvent } from './pushNotifications';
 async function notifyRecipients(
   item: Item,
   actorId: string,
+  actorName: string,
   recipientIds: string[],
   comment: ItemComment,
   body: string,
-  type: Extract<PushNotificationType, 'item.comment.mention' | 'item.comment.reply'>
+  type:
+    | Extract<PushNotificationType, 'item.comment.mention' | 'item.comment.reply'>
+    | 'item.comment.reaction',
+  reaction?: string
 ): Promise<void> {
   if (recipientIds.length === 0) return;
 
@@ -23,6 +27,7 @@ async function notifyRecipients(
     await enqueuePushEvent({
       type,
       actorId,
+      actorName,
       recipientIds: chunk,
       title: item.title,
       body,
@@ -31,6 +36,7 @@ async function notifyRecipients(
         groupId: item.groupId,
         itemId: item.id,
         commentId: comment.id,
+        ...(reaction ? { reaction } : {}),
       },
     });
   }
@@ -41,15 +47,17 @@ export async function notifyCommentMentions(
   comment: ItemComment,
   groupMemberIds: string[],
   actorId: string,
-  actorName: string
+  actorName: string,
+  excludeRecipientIds: string[] = []
 ): Promise<void> {
+  const excluded = new Set(excludeRecipientIds);
   const recipientIds = getCommentNotificationRecipients(
     item,
     groupMemberIds,
     comment.mentionUserIds,
     comment.mentionEveryone,
     actorId
-  );
+  ).filter((recipientId) => !excluded.has(recipientId));
 
   if (recipientIds.length === 0) return;
 
@@ -61,6 +69,7 @@ export async function notifyCommentMentions(
   await notifyRecipients(
     item,
     actorId,
+    actorName,
     recipientIds,
     comment,
     body,
@@ -83,10 +92,35 @@ export async function notifyCommentReply(
   await notifyRecipients(
     item,
     actorId,
+    actorName,
     [parentComment.authorId],
     comment,
     body,
     'item.comment.reply'
+  );
+}
+
+export async function notifyCommentReaction(
+  item: Item,
+  comment: ItemComment,
+  actorId: string,
+  actorName: string,
+  emoji: string
+): Promise<void> {
+  if (comment.authorId === actorId) return;
+
+  const preview = comment.body.trim().slice(0, 80);
+  const body = `${actorName} reacted ${emoji} to your comment: ${preview}`;
+
+  await notifyRecipients(
+    item,
+    actorId,
+    actorName,
+    [comment.authorId],
+    comment,
+    body,
+    'item.comment.reaction',
+    emoji
   );
 }
 
@@ -96,15 +130,17 @@ export async function notifyNewCommentMentions(
   groupMemberIds: string[],
   actorId: string,
   actorName: string,
-  previous: Pick<ItemComment, 'mentionUserIds' | 'mentionEveryone'>
+  previous: Pick<ItemComment, 'mentionUserIds' | 'mentionEveryone'>,
+  excludeRecipientIds: string[] = []
 ): Promise<void> {
+  const excluded = new Set(excludeRecipientIds);
   const recipientIds = getNewMentionRecipients(
     previous,
     comment,
     item,
     groupMemberIds,
     actorId
-  );
+  ).filter((recipientId) => !excluded.has(recipientId));
 
   if (recipientIds.length === 0) return;
 
@@ -113,6 +149,7 @@ export async function notifyNewCommentMentions(
   await notifyRecipients(
     item,
     actorId,
+    actorName,
     recipientIds,
     comment,
     body,

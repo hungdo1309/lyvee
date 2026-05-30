@@ -22,6 +22,8 @@ interface ActivityNotificationListProps {
   emptySubtitle?: string;
   embedded?: boolean;
   showRetentionNote?: boolean;
+  selectionMode?: boolean;
+  selectedIds?: ReadonlySet<string>;
 }
 
 export function ActivityNotificationList({
@@ -33,6 +35,8 @@ export function ActivityNotificationList({
   emptySubtitle = NOTIFICATIONS_EMPTY_SUBTITLE,
   embedded = false,
   showRetentionNote = false,
+  selectionMode = false,
+  selectedIds,
 }: ActivityNotificationListProps) {
   if (loading) {
     return (
@@ -61,15 +65,17 @@ export function ActivityNotificationList({
         showsVerticalScrollIndicator
         keyboardShouldPersistTaps="handled"
       >
-        {showRetentionNote ? <NotificationsRetentionNote /> : null}
         {notifications.map((notification) => (
           <ActivityNotificationRow
             key={notification.id}
             notification={notification}
             onPress={onPressNotification}
             fullPage
+            selectionMode={selectionMode}
+            selected={selectedIds?.has(notification.id) ?? false}
           />
         ))}
+        {showRetentionNote ? <NotificationsRetentionNote /> : null}
         {listFooter}
       </ScrollView>
     );

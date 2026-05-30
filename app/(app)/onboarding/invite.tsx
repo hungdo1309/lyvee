@@ -24,6 +24,7 @@ import {
 import { Group } from '../../../src/types';
 import { colors, layout, spacing, typography } from '../../../src/constants/theme';
 import {
+  ONBOARDING_SKIP_LABEL,
   buildOnboardingHref,
   getOnboardingSetupStepProps,
   normalizeOnboardingGroupId,
@@ -51,6 +52,10 @@ export default function OnboardingInviteScreen() {
     if (groupId || loading) return;
     router.replace(buildOnboardingHref('/(app)/onboarding/item-types'));
   }, [groupId, loading]);
+
+  const goToTour = () => {
+    router.push(buildOnboardingHref('/(app)/onboarding/item-types', groupId));
+  };
 
   const contextGroup = useMemo(
     () => (groupId ? groups.find((entry) => entry.id === groupId) ?? null : null),
@@ -111,10 +116,6 @@ export default function OnboardingInviteScreen() {
     ensureGroupInvite(group).catch(() => {});
   }, [group, user]);
 
-  const goNext = () => {
-    router.push(buildOnboardingHref('/(app)/onboarding/item-types', groupId));
-  };
-
   const handleShare = async () => {
     if (!group) return;
     await Share.share({ message: buildInviteMessage(group) });
@@ -130,15 +131,8 @@ export default function OnboardingInviteScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
           <Text style={styles.subtitle}>Group not found</Text>
-          <Button
-            title="Continue tour"
-            onPress={() => router.push(buildOnboardingHref('/(app)/onboarding/item-types'))}
-          />
-          <Button
-            title="Go back"
-            variant="secondary"
-            onPress={() => router.back()}
-          />
+          <Button title="Continue" onPress={goToTour} />
+          <Button title="Go back" variant="secondary" onPress={() => router.back()} />
         </View>
       </SafeAreaView>
     );
@@ -177,11 +171,15 @@ export default function OnboardingInviteScreen() {
           onPress={handleShare}
           style={styles.footerButton}
         />
-        <Button title="Continue" size="lg" onPress={goNext} />
         <Button
-          title="Skip for now"
+          title="Continue"
+          size="lg"
+          onPress={goToTour}
+        />
+        <Button
+          title={ONBOARDING_SKIP_LABEL}
           variant="ghost"
-          onPress={goNext}
+          onPress={goToTour}
           style={styles.skip}
         />
       </View>

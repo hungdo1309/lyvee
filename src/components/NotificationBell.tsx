@@ -111,7 +111,7 @@ export function NotificationBell({ embedded = false }: NotificationBellProps) {
             unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'
           }
         >
-          <Ionicons name="notifications-outline" size={40} color={colors.text} />
+          <Ionicons name="notifications-outline" size={36} color={colors.text} />
         </TouchableOpacity>
         {showUnreadDot ? <View style={styles.unreadDot} /> : null}
       </View>

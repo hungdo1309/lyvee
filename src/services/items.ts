@@ -253,20 +253,48 @@ export async function getItem(itemId: string): Promise<Item | null> {
   return parseItem(snap.id, snap.data() as Record<string, unknown>);
 }
 
-export function subscribeToItem(
-  itemId: string,
-  callback: (item: Item | null) => void
-): () => void {
-  return onSnapshot(
-    doc(db, 'items', itemId),
-    (snap) => {
-      callback(snap.exists() ? parseItem(snap.id, snap.data() as Record<string, unknown>) : null);
-    },
-    (error) => {
-      console.warn('[items] subscribeToItem:', error.code, error.message);
-      callback(null);
-    }
+function buildGroupItemsQuery(groupId: string, userId: string) {
+  return query(
+    collection(db, 'items'),
+    or(
+      and(where('groupId', '==', groupId), where('visibility', '==', 'everyone')),
+      and(
+        where('groupId', '==', groupId),
+        where('visibleTo', 'array-contains', userId)
+      )
+    )
   );
+}
+
+function mapGroupItemSnapshot(
+  snapshot: { docs: Array<{ id: string; data: () => Record<string, unknown> }> },
+  userId: string
+): Item[] {
+  return dedupeItemsById(
+    snapshot.docs.map((entry) => parseItem(entry.id, entry.data()))
+  ).filter((item) => isItemVisibleToMember(item, userId));
+}
+
+/** One-shot fetch for inactive groups (avoids permanent listeners). */
+export async function fetchGroupItemsOnce(
+  groupId: string,
+  userId: string
+): Promise<Item[]> {
+  const snapshot = await getDocs(buildGroupItemsQuery(groupId, userId));
+  return mapGroupItemSnapshot(snapshot, userId);
+}
+
+export async function fetchItemsForGroups(
+  groupIds: string[],
+  userId: string
+): Promise<Map<string, Item[]>> {
+  const entries = await Promise.all(
+    groupIds.map(async (groupId) => {
+      const items = await fetchGroupItemsOnce(groupId, userId);
+      return [groupId, items] as const;
+    })
+  );
+  return new Map(entries);
 }
 
 /** Toggle completion for a single or recurring task occurrence. */
@@ -312,112 +340,22 @@ function sortItems(items: Item[]): Item[] {
   });
 }
 
-function subscribeToGroupItemQuery(
+/** Live updates for a single group (use only for the active group). */
+export function subscribeToGroupItems(
   groupId: string,
   userId: string,
   onItems: (items: Item[]) => void
 ): () => void {
-  const q = query(
-    collection(db, 'items'),
-    or(
-      and(where('groupId', '==', groupId), where('visibility', '==', 'everyone')),
-      and(
-        where('groupId', '==', groupId),
-        where('visibleTo', 'array-contains', userId)
-      )
-    )
-  );
   return onSnapshot(
-    q,
+    buildGroupItemsQuery(groupId, userId),
     (snapshot) => {
-      const items = dedupeItemsById(
-        snapshot.docs.map((d) => parseItem(d.id, d.data() as Record<string, unknown>))
-      ).filter((item) => isItemVisibleToMember(item, userId));
-      onItems(items);
+      onItems(mapGroupItemSnapshot(snapshot, userId));
     },
     (error) => {
-      console.warn(
-        `[items] subscribeToAllUserItems (${groupId}):`,
-        error.code,
-        error.message
-      );
+      console.warn(`[items] subscribeToGroupItems (${groupId}):`, error.code, error.message);
       onItems([]);
     }
   );
-}
-
-export interface AllUserItemsSubscription {
-  setGroupIds: (groupIds: string[]) => void;
-  destroy: () => void;
-}
-
-/** Manages per-group listeners incrementally to avoid full resync on group metadata changes. */
-export function createAllUserItemsSubscription(
-  userId: string,
-  callback: (items: Item[]) => void
-): AllUserItemsSubscription {
-  const itemsByGroup = new Map<string, Item[]>();
-  const listeners = new Map<string, () => void>();
-  let lastSignature = '';
-
-  const emit = () => {
-    const next = sortItems(Array.from(itemsByGroup.values()).flat());
-    const signature = next.map((item) => `${item.id}:${item.updatedAt ?? ''}`).join('|');
-    if (signature === lastSignature) return;
-    lastSignature = signature;
-    callback(next);
-  };
-
-  const removeGroupListener = (groupId: string) => {
-    listeners.get(groupId)?.();
-    listeners.delete(groupId);
-    itemsByGroup.delete(groupId);
-  };
-
-  const addGroupListener = (groupId: string) => {
-    if (listeners.has(groupId)) return;
-    const unsub = subscribeToGroupItemQuery(groupId, userId, (items) => {
-      itemsByGroup.set(groupId, items);
-      emit();
-    });
-    listeners.set(groupId, unsub);
-  };
-
-  return {
-    setGroupIds(groupIds: string[]) {
-      const nextIds = new Set(groupIds);
-      for (const groupId of listeners.keys()) {
-        if (!nextIds.has(groupId)) {
-          removeGroupListener(groupId);
-        }
-      }
-      for (const groupId of groupIds) {
-        addGroupListener(groupId);
-      }
-      if (groupIds.length === 0) {
-        lastSignature = '';
-        callback([]);
-      }
-    },
-    destroy() {
-      lastSignature = '';
-      for (const unsub of listeners.values()) {
-        unsub();
-      }
-      listeners.clear();
-      itemsByGroup.clear();
-    },
-  };
-}
-
-export function subscribeToAllUserItems(
-  groupIds: string[],
-  userId: string,
-  callback: (items: Item[]) => void
-): () => void {
-  const subscription = createAllUserItemsSubscription(userId, callback);
-  subscription.setGroupIds(groupIds);
-  return () => subscription.destroy();
 }
 
 export const ITEM_TYPES: ItemType[] = ['task', 'activity', 'document'];

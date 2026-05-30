@@ -1,17 +1,23 @@
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
+import type { QueryDocumentSnapshot } from 'firebase/firestore';
 import {
   deleteExpiredActivityNotifications,
+  fetchActivityNotificationsPage,
   subscribeToActivityNotifications,
 } from '../services/activityNotifications';
 import { ActivityNotification } from '../types/activityNotifications';
-import { POPOVER_NOTIFICATION_LIMIT } from '../constants/notifications';
+import {
+  NOTIFICATION_PAGE_SIZE,
+  POPOVER_NOTIFICATION_LIMIT,
+} from '../constants/notifications';
 import { useAuth } from './AuthContext';
 
 interface ActivityNotificationsContextValue {
@@ -19,6 +25,9 @@ interface ActivityNotificationsContextValue {
   popoverNotifications: ActivityNotification[];
   unreadCount: number;
   loading: boolean;
+  hasMore: boolean;
+  loadingMore: boolean;
+  loadMore: () => Promise<void>;
 }
 
 const ActivityNotificationsContext =
@@ -28,7 +37,23 @@ const EMPTY_NOTIFICATIONS: ActivityNotification[] = [];
 const cleanupCompletedForUser = new Set<string>();
 
 function getNotificationsSignature(notifications: ActivityNotification[]): string {
-  return notifications.map((notification) => `${notification.id}:${notification.readAt ?? ''}`).join('|');
+  return notifications
+    .map((notification) => `${notification.id}:${notification.readAt ?? ''}`)
+    .join('|');
+}
+
+function mergeNotificationLists(
+  liveNotifications: ActivityNotification[],
+  olderNotifications: ActivityNotification[]
+): ActivityNotification[] {
+  if (olderNotifications.length === 0) return liveNotifications;
+
+  const liveIds = new Set(liveNotifications.map((notification) => notification.id));
+  const mergedOlder = olderNotifications.filter(
+    (notification) => !liveIds.has(notification.id)
+  );
+
+  return [...liveNotifications, ...mergedOlder];
 }
 
 export function ActivityNotificationsProvider({
@@ -38,19 +63,33 @@ export function ActivityNotificationsProvider({
 }) {
   const { user } = useAuth();
   const userId = user?.id;
-  const [notifications, setNotifications] = useState<ActivityNotification[]>(EMPTY_NOTIFICATIONS);
+  const [liveNotifications, setLiveNotifications] =
+    useState<ActivityNotification[]>(EMPTY_NOTIFICATIONS);
+  const [olderNotifications, setOlderNotifications] =
+    useState<ActivityNotification[]>(EMPTY_NOTIFICATIONS);
   const [loading, setLoading] = useState(Boolean(userId));
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const signatureRef = useRef('');
+  const historyCursorRef = useRef<QueryDocumentSnapshot | null>(null);
+  const paginatedRef = useRef(false);
 
   useEffect(() => {
     if (!userId) {
       signatureRef.current = '';
-      setNotifications(EMPTY_NOTIFICATIONS);
+      historyCursorRef.current = null;
+      paginatedRef.current = false;
+      setLiveNotifications(EMPTY_NOTIFICATIONS);
+      setOlderNotifications(EMPTY_NOTIFICATIONS);
+      setHasMore(false);
       setLoading(false);
       return;
     }
 
     setLoading(true);
+    paginatedRef.current = false;
+    historyCursorRef.current = null;
+    setOlderNotifications(EMPTY_NOTIFICATIONS);
     let active = true;
 
     if (!cleanupCompletedForUser.has(userId)) {
@@ -63,23 +102,68 @@ export function ActivityNotificationsProvider({
       });
     }
 
-    const unsubscribe = subscribeToActivityNotifications(userId, (next) => {
+    const unsubscribe = subscribeToActivityNotifications(userId, (snapshot) => {
       if (!active) return;
 
-      const signature = getNotificationsSignature(next);
+      const signature = getNotificationsSignature(snapshot.notifications);
       if (signature !== signatureRef.current) {
         signatureRef.current = signature;
-        setNotifications(next);
+        setLiveNotifications(snapshot.notifications);
       }
+
+      if (!paginatedRef.current) {
+        historyCursorRef.current = snapshot.lastDoc;
+        setHasMore(snapshot.hasMore);
+      }
+
       setLoading(false);
     });
 
     return () => {
       active = false;
       signatureRef.current = '';
+      historyCursorRef.current = null;
+      paginatedRef.current = false;
       unsubscribe();
     };
   }, [userId]);
+
+  const loadMore = useCallback(async () => {
+    if (!userId || loadingMore || !hasMore || !historyCursorRef.current) return;
+
+    setLoadingMore(true);
+    paginatedRef.current = true;
+
+    try {
+      const page = await fetchActivityNotificationsPage(
+        userId,
+        NOTIFICATION_PAGE_SIZE,
+        historyCursorRef.current
+      );
+
+      historyCursorRef.current = page.lastDoc;
+      setHasMore(page.hasMore);
+
+      const liveIds = new Set(liveNotifications.map((notification) => notification.id));
+      setOlderNotifications((current) => {
+        const existingIds = new Set(current.map((notification) => notification.id));
+        const next = page.notifications.filter(
+          (notification) =>
+            !liveIds.has(notification.id) && !existingIds.has(notification.id)
+        );
+        return next.length > 0 ? [...current, ...next] : current;
+      });
+    } catch (error) {
+      console.warn('[ActivityNotificationsProvider] loadMore:', error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [hasMore, liveNotifications, loadingMore, userId]);
+
+  const notifications = useMemo(
+    () => mergeNotificationLists(liveNotifications, olderNotifications),
+    [liveNotifications, olderNotifications]
+  );
 
   const unreadCount = useMemo(
     () => notifications.filter((notification) => !notification.readAt).length,
@@ -87,8 +171,8 @@ export function ActivityNotificationsProvider({
   );
 
   const popoverNotifications = useMemo(
-    () => notifications.slice(0, POPOVER_NOTIFICATION_LIMIT),
-    [notifications]
+    () => liveNotifications.slice(0, POPOVER_NOTIFICATION_LIMIT),
+    [liveNotifications]
   );
 
   const value = useMemo(
@@ -97,8 +181,19 @@ export function ActivityNotificationsProvider({
       popoverNotifications,
       unreadCount,
       loading,
+      hasMore,
+      loadingMore,
+      loadMore,
     }),
-    [loading, notifications, popoverNotifications, unreadCount]
+    [
+      hasMore,
+      loadMore,
+      loading,
+      loadingMore,
+      notifications,
+      popoverNotifications,
+      unreadCount,
+    ]
   );
 
   return (

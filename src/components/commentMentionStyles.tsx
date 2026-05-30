@@ -7,7 +7,6 @@ export const commentMentionStyles = StyleSheet.create({
   bodyTextComposer: {
     color: colors.text,
     fontSize: 16,
-    lineHeight: 22,
     ...Platform.select({
       android: {
         includeFontPadding: false,
@@ -24,8 +23,6 @@ export const commentMentionStyles = StyleSheet.create({
     color: colors.primaryDark,
     fontWeight: '700',
     fontSize: 16,
-    lineHeight: 22,
-    backgroundColor: colors.primaryLight,
     ...Platform.select({
       android: {
         includeFontPadding: false,
@@ -38,7 +35,6 @@ export const commentMentionStyles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 15,
     lineHeight: 22,
-    backgroundColor: colors.primaryLight,
   },
 });
 

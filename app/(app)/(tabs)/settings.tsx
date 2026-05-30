@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Constants from 'expo-constants';
 import { appAlert } from '../../../src/utils/dialog';
 import { router, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '../../../src/context/AuthContext';
+import { GoogleSignInCancelledError, useAuth } from '../../../src/context/AuthContext';
 import { Button } from '../../../src/components/Button';
 import { Card } from '../../../src/components/Card';
 import { InfoRow, SectionCard } from '../../../src/components/SectionCard';
@@ -12,13 +12,42 @@ import { colors, layout, radius, spacing, typography } from '../../../src/consta
 import { APP_NAME } from '../../../src/constants/app';
 import { getNameInitials } from '../../../src/utils/names';
 import { formatMemberSince } from '../../../src/utils/dates';
+import { isGoogleSignInAvailable, isGoogleSignInConfigured } from '../../../src/config/googleSignIn';
+import { GOOGLE_SIGNIN_UNAVAILABLE_MESSAGE } from '../../../src/utils/googleSignInNative';
 
 export default function SettingsScreen() {
-  const { user, firebaseUser, logout } = useAuth();
+  const { user, firebaseUser, linkedProviders, linkGoogle, logout } = useAuth();
+  const [linkingGoogle, setLinkingGoogle] = useState(false);
   const appVersion = Constants.expoConfig?.version ?? '1.2.0';
   const memberSince = formatMemberSince(
     user?.createdAt ?? firebaseUser?.metadata.creationTime ?? ''
   );
+  const { hasPassword, hasGoogle } = linkedProviders;
+  const showGoogleSection = isGoogleSignInConfigured();
+  const showGoogleLink = showGoogleSection && !hasGoogle;
+
+  const handleLinkGoogle = async () => {
+    if (!isGoogleSignInAvailable()) {
+      appAlert('Google Sign-In not available', GOOGLE_SIGNIN_UNAVAILABLE_MESSAGE);
+      return;
+    }
+
+    setLinkingGoogle(true);
+    try {
+      await linkGoogle();
+      appAlert('Google linked', 'You can now sign in with Google or email and password.');
+    } catch (error: unknown) {
+      if (error instanceof GoogleSignInCancelledError) {
+        return;
+      }
+      appAlert(
+        'Could not link Google',
+        error instanceof Error ? error.message : 'Failed to link Google account'
+      );
+    } finally {
+      setLinkingGoogle(false);
+    }
+  };
 
   const handleLogout = () => {
     appAlert('Sign out', 'Are you sure you want to sign out?', [
@@ -54,17 +83,41 @@ export default function SettingsScreen() {
       </Card>
 
       <SectionCard title="Account">
-        <Button
-          title="Change Email"
-          variant="secondary"
-          onPress={() => router.push('/(app)/change-email' as Href)}
-          style={styles.accountButton}
-        />
-        <Button
-          title="Change Password"
-          variant="secondary"
-          onPress={() => router.push('/(app)/change-password' as Href)}
-        />
+        {hasPassword ? (
+          <>
+            <Button
+              title="Change Email"
+              variant="secondary"
+              onPress={() => router.push('/(app)/change-email' as Href)}
+              style={styles.accountButton}
+            />
+            <Button
+              title="Change Password"
+              variant="secondary"
+              onPress={() => router.push('/(app)/change-password' as Href)}
+              style={showGoogleSection ? styles.accountButton : undefined}
+            />
+          </>
+        ) : (
+          <Button
+            title="Restore Password"
+            variant="secondary"
+            onPress={() => router.push('/(app)/set-password' as Href)}
+            style={showGoogleSection ? styles.accountButton : undefined}
+          />
+        )}
+        {showGoogleSection && hasGoogle ? (
+          <Text style={styles.googleLinkedStatus}>Google Account Linked</Text>
+        ) : null}
+        {showGoogleLink ? (
+          <Button
+            title="Link your Google Account"
+            variant="secondary"
+            onPress={handleLinkGoogle}
+            loading={linkingGoogle}
+            preserveTitle
+          />
+        ) : null}
       </SectionCard>
 
       <SectionCard title="Support">
@@ -132,6 +185,12 @@ const styles = StyleSheet.create({
   },
   accountButton: {
     marginBottom: spacing.sm,
+  },
+  googleLinkedStatus: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: 'center',
+    paddingVertical: spacing.md,
   },
   footer: {
     marginTop: 'auto',

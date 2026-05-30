@@ -152,22 +152,6 @@ export function subscribeToUserGroups(
   );
 }
 
-export function subscribeToGroup(
-  groupId: string,
-  callback: (group: Group | null) => void
-): () => void {
-  return onSnapshot(
-    doc(db, 'groups', groupId),
-    (snapshot) => {
-      callback(snapshot.exists() ? normalizeGroup(snapshot.data() as Group) : null);
-    },
-    (error) => {
-      console.warn('[groups] subscribeToGroup:', error.code, error.message);
-      callback(null);
-    }
-  );
-}
-
 export async function leaveGroup(
   groupId: string,
   userId: string

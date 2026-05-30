@@ -14,8 +14,8 @@ export function NotificationsRetentionNote() {
 const styles = StyleSheet.create({
   wrap: {
     paddingHorizontal: layout.screenPadding,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
   },
   text: {
     fontSize: 13,

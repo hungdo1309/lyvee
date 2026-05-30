@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
   ActivityIndicator,
   TextInput,
   InteractionManager,
@@ -13,8 +14,15 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { Item, User } from '../types';
 import { ItemComment } from '../types/comments';
+import { CommentReactionEmoji } from '../constants/commentReactions';
 import { MentionComposerInput } from './MentionComposerInput';
 import { Button } from './Button';
+import {
+  CommentReactionDetailsModal,
+  CommentReactionPicker,
+  CommentReactionSummary,
+  groupCommentReactions,
+} from './CommentReactions';
 import { renderCommentBodyParts } from './commentMentionStyles';
 import { colors, radius, spacing } from '../constants/theme';
 import {
@@ -25,7 +33,7 @@ import {
   parseMentionsFromBody,
   splitCommentBodyParts,
 } from '../utils/commentMentions';
-import { getFirstName, getNameInitials } from '../utils/names';
+import { getNameInitials } from '../utils/names';
 import {
   buildCommentThreadViews,
   createItemComment,
@@ -36,6 +44,11 @@ import {
   subscribeToRecentItemComments,
   updateItemComment,
 } from '../services/comments';
+import {
+  fetchCommentReactions,
+  fetchUserReactionsForComments,
+  toggleCommentReaction,
+} from '../services/commentReactions';
 import { appAlert } from '../utils/dialog';
 import {
   scrollElementIntoView,
@@ -50,6 +63,7 @@ interface ItemCommentsProps {
   groupMemberIds: string[];
   currentUserId?: string;
   focusCommentId?: string;
+  compactBottom?: boolean;
 }
 
 interface ComposerState {
@@ -199,6 +213,14 @@ interface CommentRowProps {
   onReply: (comment: ItemComment) => void;
   onEdit: (comment: ItemComment) => void;
   onDelete: (comment: ItemComment) => void;
+  userReaction?: CommentReactionEmoji | null;
+  showReactionPicker?: boolean;
+  reactionBusy?: boolean;
+  canReact?: boolean;
+  onToggleReaction: (emoji: CommentReactionEmoji) => void;
+  onOpenReactionPicker: () => void;
+  onCloseReactionPicker: () => void;
+  onShowReactionDetails: () => void;
 }
 
 const CommentRow = React.memo(function CommentRow({
@@ -213,6 +235,14 @@ const CommentRow = React.memo(function CommentRow({
   onReply,
   onEdit,
   onDelete,
+  userReaction = null,
+  showReactionPicker = false,
+  reactionBusy = false,
+  canReact = false,
+  onToggleReaction,
+  onOpenReactionPicker,
+  onCloseReactionPicker,
+  onShowReactionDetails,
 }: CommentRowProps) {
   const swipeRef = useRef<Swipeable>(null);
   const isOwn = comment.authorId === currentUserId;
@@ -234,7 +264,12 @@ const CommentRow = React.memo(function CommentRow({
         </Text>
       </View>
 
-      <View style={styles.commentContent}>
+      <Pressable
+        style={styles.commentContent}
+        onLongPress={canReact ? onOpenReactionPicker : undefined}
+        delayLongPress={400}
+        disabled={reactionBusy}
+      >
         <Text style={styles.metaLine}>
           <Text style={styles.authorName}>{authorName}</Text>
           <Text style={styles.metaDot}> · </Text>
@@ -246,6 +281,14 @@ const CommentRow = React.memo(function CommentRow({
 
         <CommentBody body={comment.body} members={members} />
 
+        <CommentReactionPicker
+          visible={showReactionPicker}
+          userReaction={userReaction}
+          disabled={reactionBusy}
+          onSelect={onToggleReaction}
+          onClose={onCloseReactionPicker}
+        />
+
         <View style={styles.commentActions}>
           <TouchableOpacity onPress={() => onReply(comment)} hitSlop={8}>
             <Text style={styles.actionText}>Reply</Text>
@@ -255,8 +298,15 @@ const CommentRow = React.memo(function CommentRow({
               <Text style={styles.actionText}>Edit</Text>
             </TouchableOpacity>
           ) : null}
+          <CommentReactionSummary
+            counts={comment.reactionCounts}
+            userReaction={userReaction}
+            disabled={reactionBusy}
+            onToggleReaction={onToggleReaction}
+            onShowDetails={onShowReactionDetails}
+          />
         </View>
-      </View>
+      </Pressable>
     </View>
   );
 
@@ -300,6 +350,7 @@ export function ItemComments({
   groupMemberIds,
   currentUserId,
   focusCommentId,
+  compactBottom = false,
 }: ItemCommentsProps) {
   const scrollIntoView = useScrollIntoView();
   const scrollToFocus = useKeyboardFocusScroll();
@@ -332,6 +383,17 @@ export function ItemComments({
   const initialCommentListenerRef = useRef(true);
   const commentRowRefs = useRef<Map<string, View>>(new Map());
   const focusAttemptRef = useRef<string | null>(null);
+  const loadedReactionCommentIdsRef = useRef<Set<string>>(new Set());
+  const [userReactionsByCommentId, setUserReactionsByCommentId] = useState<
+    Partial<Record<string, CommentReactionEmoji>>
+  >({});
+  const [reactionPickerCommentId, setReactionPickerCommentId] = useState<string | null>(null);
+  const [reactionDetailsComment, setReactionDetailsComment] = useState<ItemComment | null>(null);
+  const [reactionDetailsGroups, setReactionDetailsGroups] = useState<
+    ReturnType<typeof groupCommentReactions>
+  >([]);
+  const [reactionDetailsLoading, setReactionDetailsLoading] = useState(false);
+  const [reactingCommentId, setReactingCommentId] = useState<string | null>(null);
 
   const membersById = useMemo(
     () => new Map(groupMembers.map((member) => [member.id, member])),
@@ -341,7 +403,7 @@ export function ItemComments({
   const getMemberDisplay = useCallback(
     (authorId: string) => {
       const member = membersById.get(authorId);
-      const name = member ? getFirstName(member.name) : 'Member';
+      const name = member?.name.trim() || 'Member';
       return {
         authorName: name,
         authorInitials: getNameInitials(member?.name ?? name),
@@ -402,6 +464,7 @@ export function ItemComments({
       setVisibleReplyCountByRoot({});
       commentsCursorRef.current = null;
       initialCommentListenerRef.current = true;
+      loadedReactionCommentIdsRef.current = new Set();
 
       unsubscribe = subscribeToRecentItemComments(item.id, (snapshot) => {
         if (!active) return;
@@ -429,6 +492,129 @@ export function ItemComments({
       unsubscribe?.();
     };
   }, [item.id]);
+
+  useEffect(() => {
+    if (!currentUserId || comments.length === 0) {
+      setUserReactionsByCommentId({});
+      loadedReactionCommentIdsRef.current = new Set();
+      return;
+    }
+
+    const missingIds = comments
+      .map((comment) => comment.id)
+      .filter((commentId) => !loadedReactionCommentIdsRef.current.has(commentId));
+
+    if (missingIds.length === 0) return;
+
+    let active = true;
+    void fetchUserReactionsForComments(item.id, missingIds, currentUserId).then((next) => {
+      if (!active) return;
+      for (const commentId of missingIds) {
+        loadedReactionCommentIdsRef.current.add(commentId);
+      }
+      setUserReactionsByCommentId((current) => ({ ...current, ...next }));
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [comments, currentUserId, item.id]);
+
+  const handleToggleReaction = useCallback(
+    async (comment: ItemComment, emoji: CommentReactionEmoji) => {
+      if (!currentUserId || reactingCommentId) return;
+
+      setReactingCommentId(comment.id);
+      setReactionPickerCommentId((current) => (current === comment.id ? null : current));
+
+      try {
+        const actorName = currentUserId
+          ? getMemberDisplay(currentUserId).authorName
+          : 'Someone';
+        const result = await toggleCommentReaction(
+          item,
+          comment,
+          currentUserId,
+          emoji,
+          actorName
+        );
+        setUserReactionsByCommentId((current) => {
+          const next = { ...current };
+          if (result.userReaction) {
+            next[comment.id] = result.userReaction;
+          } else {
+            delete next[comment.id];
+          }
+          return next;
+        });
+        setComments((current) =>
+          current.map((entry) =>
+            entry.id === comment.id
+              ? {
+                  ...entry,
+                  reactionCounts: result.reactionCounts,
+                  updatedAt: new Date().toISOString(),
+                }
+              : entry
+          )
+        );
+      } catch (error: unknown) {
+        appAlert(
+          'Error',
+          error instanceof Error ? error.message : 'Could not update reaction'
+        );
+      } finally {
+        setReactingCommentId(null);
+      }
+    },
+    [currentUserId, getMemberDisplay, item, reactingCommentId]
+  );
+
+  const handleShowReactionDetails = useCallback(
+    async (comment: ItemComment) => {
+      setReactionDetailsComment(comment);
+      setReactionDetailsLoading(true);
+      try {
+        const reactions = await fetchCommentReactions(item.id, comment.id);
+        setReactionDetailsGroups(groupCommentReactions(reactions));
+      } catch (error: unknown) {
+        console.warn('[ItemComments] fetchCommentReactions:', error);
+        setReactionDetailsGroups([]);
+      } finally {
+        setReactionDetailsLoading(false);
+      }
+    },
+    [item.id]
+  );
+
+  const getCommentReactionProps = useCallback(
+    (comment: ItemComment) => ({
+      userReaction: userReactionsByCommentId[comment.id] ?? null,
+      showReactionPicker: reactionPickerCommentId === comment.id,
+      reactionBusy: reactingCommentId === comment.id,
+      canReact: Boolean(currentUserId),
+      onToggleReaction: (emoji: CommentReactionEmoji) => {
+        void handleToggleReaction(comment, emoji);
+      },
+      onOpenReactionPicker: () => {
+        setReactionPickerCommentId((current) => (current === comment.id ? null : comment.id));
+      },
+      onCloseReactionPicker: () => {
+        setReactionPickerCommentId((current) => (current === comment.id ? null : current));
+      },
+      onShowReactionDetails: () => {
+        void handleShowReactionDetails(comment);
+      },
+    }),
+    [
+      currentUserId,
+      handleShowReactionDetails,
+      handleToggleReaction,
+      reactingCommentId,
+      reactionPickerCommentId,
+      userReactionsByCommentId,
+    ]
+  );
 
   const handleSeeMoreComments = useCallback(async () => {
     if (hiddenThreadCount > 0) {
@@ -891,7 +1077,10 @@ export function ItemComments({
   );
 
   return (
-    <View style={styles.container} ref={composerRef}>
+    <View
+      style={[styles.container, compactBottom && styles.containerCompactBottom]}
+      ref={composerRef}
+    >
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionLabel}>Comments</Text>
         {!showTopComposer ? (
@@ -959,6 +1148,7 @@ export function ItemComments({
                     onReply={handleReply}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
+                    {...getCommentReactionProps(root)}
                   />
                   {visibleReplies.map((reply) => {
                     const replyDisplay = getMemberDisplay(reply.authorId);
@@ -979,6 +1169,7 @@ export function ItemComments({
                         onReply={handleReply}
                         onEdit={handleEdit}
                         onDelete={handleDelete}
+                        {...getCommentReactionProps(reply)}
                       />
                     );
                   })}
@@ -1033,6 +1224,17 @@ export function ItemComments({
           </View>
         )}
       </View>
+
+      <CommentReactionDetailsModal
+        visible={reactionDetailsComment !== null}
+        loading={reactionDetailsLoading}
+        groups={reactionDetailsGroups}
+        members={groupMembers}
+        onClose={() => {
+          setReactionDetailsComment(null);
+          setReactionDetailsGroups([]);
+        }}
+      />
     </View>
   );
 }
@@ -1041,6 +1243,9 @@ const styles = StyleSheet.create({
   container: {
     marginTop: spacing.md,
     marginBottom: spacing.xl,
+  },
+  containerCompactBottom: {
+    marginBottom: spacing.sm,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1184,6 +1389,8 @@ const styles = StyleSheet.create({
   },
   commentActions: {
     flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: spacing.md,
     marginTop: 4,
   },

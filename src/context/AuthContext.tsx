@@ -2,10 +2,12 @@ import React, {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useState,
   useCallback,
 } from 'react';
 import { User as FirebaseUser } from 'firebase/auth';
+import { auth } from '../config/firebase';
 import {
   signIn,
   signUp,
@@ -15,16 +17,29 @@ import {
   registerPushToken,
   changeUserEmail,
   changeUserPassword,
+  signInWithGoogle,
+  linkGoogleWithPassword,
+  linkGoogleAccount,
+  addPasswordToAccount,
+  clearPendingGoogleCredential,
+  GoogleSignInCancelledError,
+  GoogleAccountLinkError,
 } from '../services/auth';
 import { clearActiveGroupSession } from '../services/session';
+import { getLinkedAuthProviders, type LinkedAuthProviders } from '../utils/authProviders';
 import { User } from '../types';
 
 interface AuthContextValue {
   user: User | null;
   firebaseUser: FirebaseUser | null;
+  linkedProviders: LinkedAuthProviders;
   loading: boolean;
   login: (email: string, password: string) => Promise<User>;
   register: (email: string, password: string, name: string) => Promise<User>;
+  loginWithGoogle: () => Promise<User>;
+  linkGoogleWithPassword: (email: string, password: string) => Promise<User>;
+  linkGoogle: () => Promise<void>;
+  setPassword: (email: string, password: string) => Promise<void>;
   changeEmail: (newEmail: string, currentPassword: string) => Promise<User>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -32,10 +47,26 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+export { GoogleSignInCancelledError, GoogleAccountLinkError };
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [authRefreshKey, setAuthRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  const linkedProviders = useMemo(
+    () => getLinkedAuthProviders(firebaseUser ?? auth.currentUser),
+    [firebaseUser, authRefreshKey]
+  );
+
+  const refreshLinkedProviders = useCallback(async () => {
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+      setFirebaseUser(auth.currentUser);
+      setAuthRefreshKey((key) => key + 1);
+    }
+  }, []);
 
   useEffect(() => {
     const unsubscribe = subscribeToAuth(async (fbUser) => {
@@ -80,6 +111,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const loginWithGoogle = useCallback(async () => {
+    const profile = await signInWithGoogle();
+    await clearActiveGroupSession(profile.id);
+    setUser(profile);
+    return profile;
+  }, []);
+
+  const linkGoogleWithPasswordHandler = useCallback(
+    async (email: string, password: string) => {
+      const profile = await linkGoogleWithPassword(email, password);
+      await clearActiveGroupSession(profile.id);
+      setUser(profile);
+      return profile;
+    },
+    []
+  );
+
+  const linkGoogle = useCallback(async () => {
+    await linkGoogleAccount();
+    await refreshLinkedProviders();
+  }, [refreshLinkedProviders]);
+
+  const setPassword = useCallback(async (email: string, password: string) => {
+    await addPasswordToAccount(email, password);
+    await refreshLinkedProviders();
+  }, [refreshLinkedProviders]);
+
   const changeEmail = useCallback(async (newEmail: string, currentPassword: string) => {
     const profile = await changeUserEmail(newEmail, currentPassword);
     setUser(profile);
@@ -95,6 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     const userId = user?.id;
+    clearPendingGoogleCredential();
     await signOut();
     if (userId) await clearActiveGroupSession(userId);
     setUser(null);
@@ -103,7 +162,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, firebaseUser, loading, login, register, changeEmail, changePassword, logout }}
+      value={{
+        user,
+        firebaseUser,
+        linkedProviders,
+        loading,
+        login,
+        register,
+        loginWithGoogle,
+        linkGoogleWithPassword: linkGoogleWithPasswordHandler,
+        linkGoogle,
+        setPassword,
+        changeEmail,
+        changePassword,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>

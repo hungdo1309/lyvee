@@ -267,32 +267,6 @@ export function parseMentionsFromBody(
   };
 }
 
-function matchFallbackMentionAt(
-  body: string,
-  atIndex: number
-): { mentionText: string; length: number } | null {
-  const charBefore = atIndex > 0 ? body[atIndex - 1] : ' ';
-  if (charBefore !== ' ' && charBefore !== '\n' && atIndex !== 0) {
-    return null;
-  }
-
-  const afterAt = body.slice(atIndex + 1);
-  if (!afterAt || /^\s/.test(afterAt)) {
-    return null;
-  }
-
-  const tokenMatch = afterAt.match(/^[^\s@]+/);
-  if (!tokenMatch) {
-    return null;
-  }
-
-  const token = tokenMatch[0];
-  return {
-    mentionText: `@${token}`,
-    length: 1 + token.length,
-  };
-}
-
 export function splitCommentBodyParts(body: string, members: User[]): CommentBodyPart[] {
   const parts: CommentBodyPart[] = [];
   let textStart = 0;
@@ -304,8 +278,7 @@ export function splitCommentBodyParts(body: string, members: User[]): CommentBod
       continue;
     }
 
-    const match =
-      matchMentionAt(body, index, members) ?? matchFallbackMentionAt(body, index);
+    const match = matchMentionAt(body, index, members);
     if (!match) {
       index += 1;
       continue;
@@ -327,15 +300,10 @@ export function splitCommentBodyParts(body: string, members: User[]): CommentBod
   return parts.length > 0 ? parts : [{ type: 'text', value: body }];
 }
 
-export function splitComposerBodyParts(
-  body: string,
-  members: User[],
-  cursor: number
-): CommentBodyPart[] {
+export function splitComposerBodyParts(body: string, members: User[]): CommentBodyPart[] {
   const parts: CommentBodyPart[] = [];
   let textStart = 0;
   let index = 0;
-  const activeMention = getActiveMentionQuery(body, cursor);
 
   while (index < body.length) {
     if (body[index] !== '@') {
@@ -343,26 +311,7 @@ export function splitComposerBodyParts(
       continue;
     }
 
-    let match:
-      | { mentionText: string; length: number }
-      | null
-      | undefined = matchMentionAt(body, index, members);
-
-    if (
-      !match &&
-      activeMention &&
-      index === activeMention.startIndex &&
-      cursor > index
-    ) {
-      match = {
-        mentionText: body.slice(index, cursor),
-        length: cursor - index,
-      };
-    }
-
-    if (!match) {
-      match = matchFallbackMentionAt(body, index);
-    }
+    const match = matchMentionAt(body, index, members);
 
     if (!match) {
       index += 1;

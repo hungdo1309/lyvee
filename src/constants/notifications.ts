@@ -1,8 +1,14 @@
 export const NOTIFICATION_RETENTION_DAYS = 30;
 export const POPOVER_NOTIFICATION_LIMIT = 5;
-/** Cap live notification sync reads while still covering a full month of activity. */
-export const NOTIFICATION_SYNC_LIMIT = 200;
-export const NOTIFICATION_RETENTION_NOTE = `Showing notifications from the last ${NOTIFICATION_RETENTION_DAYS} days.`;
+/** Live listener cap for bell badge and recent activity. */
+export const NOTIFICATION_LIVE_SYNC_LIMIT = 50;
+/** Page size for loading older notifications on the full screen. */
+export const NOTIFICATION_PAGE_SIZE = 50;
+/** Max docs scanned when matching a push without a notificationId. */
+export const NOTIFICATION_HISTORY_SCAN_LIMIT = 50;
+/** @deprecated Use NOTIFICATION_LIVE_SYNC_LIMIT */
+export const NOTIFICATION_SYNC_LIMIT = NOTIFICATION_LIVE_SYNC_LIMIT;
+export const NOTIFICATION_RETENTION_NOTE = `Showing notifications from the last ${NOTIFICATION_RETENTION_DAYS} days`;
 
 export function getNotificationRetentionCutoffIso(
   days = NOTIFICATION_RETENTION_DAYS
