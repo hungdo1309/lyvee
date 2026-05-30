@@ -39,6 +39,8 @@ import {
 import { appAlert } from '../utils/dialog';
 import {
   scrollElementIntoView,
+  scrollFocusedInputIntoView,
+  useKeyboardFocusScroll,
   useScrollIntoView,
 } from './KeyboardAwareScrollView';
 
@@ -155,12 +157,10 @@ function CommentComposerPanel({
               ? 'Write a reply… Type @ to mention someone'
               : 'Write a comment… Type @ to mention someone'
           }
-          autoGrow={isInline}
-          minInputHeight={isInline ? 80 : 96}
-          maxInputHeight={isInline ? 160 : 200}
           compact={isInline}
           multiline
-          numberOfLines={isInline ? 1 : 4}
+          numberOfLines={4}
+          scrollEnabled={isInline}
           style={isInline ? styles.inlineComposerInput : styles.composerInput}
         />
       </View>
@@ -302,6 +302,7 @@ export function ItemComments({
   focusCommentId,
 }: ItemCommentsProps) {
   const scrollIntoView = useScrollIntoView();
+  const scrollToFocus = useKeyboardFocusScroll();
   const [comments, setComments] = useState<ItemComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -322,6 +323,7 @@ export function ItemComments({
     end: number;
   } | null>(null);
   const composerRef = useRef<View>(null);
+  const inlineReplyComposerRef = useRef<View>(null);
   const topInputRef = useRef<TextInput>(null);
   const replyInputRef = useRef<TextInput>(null);
   const commentsCursorRef = useRef<Awaited<
@@ -540,16 +542,64 @@ export function ItemComments({
     };
   }, [comments, expandRepliesForThread, focusCommentId, item.id, loading]);
 
+  const scrollTargetIntoView = useCallback(
+    (target: View | null | undefined) => {
+      if (!target) return;
+      scrollElementIntoView(scrollIntoView, target);
+    },
+    [scrollIntoView]
+  );
+
+  const scrollReplyComposerIntoView = useCallback(() => {
+    const scrollTargets = () => {
+      scrollTargetIntoView(inlineReplyComposerRef.current);
+      scrollFocusedInputIntoView(scrollToFocus, replyInputRef.current);
+    };
+
+    requestAnimationFrame(scrollTargets);
+    setTimeout(scrollTargets, 100);
+    setTimeout(scrollTargets, 250);
+    setTimeout(scrollTargets, 450);
+  }, [scrollTargetIntoView, scrollToFocus]);
+
   useEffect(() => {
     if (!highlightedCommentId) return;
 
-    const scrollTimer = setTimeout(() => {
-      const row = commentRowRefs.current.get(highlightedCommentId);
-      scrollElementIntoView(scrollIntoView, row);
-    }, 120);
+    let cancelled = false;
+    let attempts = 0;
 
-    return () => clearTimeout(scrollTimer);
-  }, [highlightedCommentId, scrollIntoView, visibleCommentThreads, visibleReplyCountByRoot]);
+    const tryScroll = () => {
+      if (cancelled) return;
+
+      const row = commentRowRefs.current.get(highlightedCommentId);
+      if (row) {
+        scrollTargetIntoView(row);
+        return;
+      }
+
+      attempts += 1;
+      if (attempts < 12) {
+        setTimeout(tryScroll, 100);
+      }
+    };
+
+    const timer = setTimeout(tryScroll, 120);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    highlightedCommentId,
+    scrollTargetIntoView,
+    visibleCommentThreads,
+    visibleReplyCountByRoot,
+  ]);
+
+  useEffect(() => {
+    if (!replyTo) return;
+    scrollReplyComposerIntoView();
+  }, [replyTo, scrollReplyComposerIntoView, visibleReplyCountByRoot]);
 
   const resetComposer = useCallback(() => {
     setComposer(EMPTY_COMPOSER);
@@ -648,9 +698,19 @@ export function ItemComments({
       setComposer(EMPTY_COMPOSER);
       setCursor(0);
       setPendingSelection(null);
+
+      if (comment.parentCommentId) {
+        const rootId = getReplyThreadRootId(comment);
+        const replies = repliesByRootId.get(rootId) ?? [];
+        const replyIndex = replies.findIndex((reply) => reply.id === comment.id);
+        if (replyIndex >= 0) {
+          expandRepliesForThread(rootId, replyIndex + 1);
+        }
+      }
+
       focusReplyComposer();
     },
-    [focusReplyComposer]
+    [expandRepliesForThread, focusReplyComposer, repliesByRootId]
   );
 
   const handleEdit = useCallback(
@@ -934,7 +994,12 @@ export function ItemComments({
                     </TouchableOpacity>
                   ) : null}
                   {isReplyingInThread && replyTo ? (
-                    <View style={styles.inlineReplyRow}>
+                    <View
+                      ref={inlineReplyComposerRef}
+                      collapsable={false}
+                      style={styles.inlineReplyRow}
+                      onLayout={scrollReplyComposerIntoView}
+                    >
                       <CommentComposerPanel
                         variant="inline"
                         inputRef={replyInputRef}
@@ -1179,6 +1244,7 @@ const styles = StyleSheet.create({
   },
   inlineComposerInput: {
     minHeight: 80,
+    maxHeight: 160,
     textAlignVertical: 'top',
   },
 });

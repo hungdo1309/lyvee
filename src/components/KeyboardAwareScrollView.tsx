@@ -67,32 +67,43 @@ export function KeyboardAwareScrollView({
   const scrollRef = useRef<ScrollView>(null);
   const scrollYRef = useRef(0);
   const keyboardHeightRef = useRef(0);
+  const keyboardScreenYRef = useRef<number | null>(null);
   const pendingTargetRef = useRef<NativeMethods | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  const getVisibleBounds = useCallback(() => {
+    const windowHeight = Dimensions.get('window').height;
+    const visibleTop = keyboardVerticalOffset + SCROLL_GAP;
+    const visibleBottom =
+      (keyboardScreenYRef.current ?? windowHeight) - keyboardVerticalOffset - SCROLL_GAP;
+
+    return { visibleTop, visibleBottom };
+  }, [keyboardVerticalOffset]);
 
   const scrollTargetIntoView = useCallback(
     (target: NativeMethods | null | undefined) => {
       if (!target || !scrollRef.current) return;
 
       target.measureInWindow((_x, y, _width, height) => {
-        const windowHeight = Dimensions.get('window').height;
-        const keyboardHeight = keyboardHeightRef.current;
-        const visibleBottom =
-          Platform.OS === 'android'
-            ? windowHeight - keyboardVerticalOffset
-            : windowHeight - keyboardHeight - keyboardVerticalOffset;
-        const inputBottom = y + height;
+        const { visibleTop, visibleBottom } = getVisibleBounds();
+        const targetBottom = y + height;
+        let delta = 0;
 
-        if (inputBottom > visibleBottom - SCROLL_GAP) {
-          const delta = inputBottom - visibleBottom + SCROLL_GAP;
-          scrollRef.current?.scrollTo({
-            y: scrollYRef.current + delta,
-            animated: true,
-          });
+        if (y < visibleTop) {
+          delta = y - visibleTop;
+        } else if (targetBottom > visibleBottom) {
+          delta = targetBottom - visibleBottom;
         }
+
+        if (delta === 0) return;
+
+        scrollRef.current?.scrollTo({
+          y: Math.max(0, scrollYRef.current + delta),
+          animated: true,
+        });
       });
     },
-    [keyboardVerticalOffset]
+    [getVisibleBounds]
   );
 
   const flushPendingScroll = useCallback(() => {
@@ -123,7 +134,9 @@ export function KeyboardAwareScrollView({
 
       run();
       requestAnimationFrame(run);
-      setTimeout(run, Platform.OS === 'ios' ? 100 : 200);
+      setTimeout(run, 100);
+      setTimeout(run, 250);
+      setTimeout(run, Platform.OS === 'ios' ? 400 : 500);
     },
     [scrollTargetIntoView]
   );
@@ -134,13 +147,16 @@ export function KeyboardAwareScrollView({
 
     const showSub = Keyboard.addListener(showEvent, (event) => {
       keyboardHeightRef.current = event.endCoordinates.height;
+      keyboardScreenYRef.current = event.endCoordinates.screenY;
       setKeyboardHeight(event.endCoordinates.height);
       requestAnimationFrame(flushPendingScroll);
       setTimeout(flushPendingScroll, Platform.OS === 'ios' ? 50 : 100);
+      setTimeout(flushPendingScroll, Platform.OS === 'ios' ? 200 : 300);
     });
 
     const hideSub = Keyboard.addListener(hideEvent, () => {
       keyboardHeightRef.current = 0;
+      keyboardScreenYRef.current = null;
       setKeyboardHeight(0);
       pendingTargetRef.current = null;
     });

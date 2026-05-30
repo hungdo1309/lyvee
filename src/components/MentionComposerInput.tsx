@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
+  type NativeSyntheticEvent,
+  type TextLayoutEventData,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { User } from '../types';
@@ -27,6 +29,113 @@ const POPUP_MAX_VISIBLE_ROWS = 4;
 const POPUP_WIDTH = 228;
 const HORIZONTAL_PADDING = spacing.md;
 const VERTICAL_PADDING = spacing.md;
+const DEFAULT_ASCENDER = Platform.OS === 'ios' ? 14.5 : 16;
+const BASELINE_NUDGE = Platform.OS === 'ios' ? 1.5 : 2;
+const CARET_WIDTH = 2;
+const CARET_HEIGHT = 20;
+const COMPOSER_FONT_SIZE = 16;
+const COMPOSER_LINE_HEIGHT = 22;
+
+type TextLayoutLine = TextLayoutEventData['lines'][number];
+
+interface CaretPosition {
+  x: number;
+  y: number;
+}
+
+const androidTextMetrics = Platform.select({
+  android: {
+    includeFontPadding: false,
+    textAlignVertical: 'top' as const,
+    textBreakStrategy: 'simple' as const,
+  },
+  default: {},
+});
+
+function getCaretBaselineOffset(line: TextLayoutLine | undefined): number {
+  if (!line) return DEFAULT_ASCENDER;
+
+  // Prefer descender math when available — closest to the real baseline on both platforms.
+  if (line.height > 0 && line.descender < 0) {
+    return line.height + line.descender;
+  }
+
+  if (line.ascender > 0) {
+    return line.ascender;
+  }
+
+  if (line.capHeight > 0) {
+    return line.capHeight;
+  }
+
+  if (line.height > 0) {
+    return line.height * (Platform.OS === 'android' ? 0.78 : 0.74);
+  }
+
+  return DEFAULT_ASCENDER;
+}
+
+function getCursorPositionFromLines(
+  lines: TextLayoutLine[],
+  charIndex: number,
+  plainText: string
+): { line: TextLayoutLine | undefined; x: number; y: number } {
+  if (charIndex <= 0 || lines.length === 0) {
+    return { line: lines[0], x: 0, y: 0 };
+  }
+
+  const linesHaveText = lines.some((line) => typeof line.text === 'string' && line.text.length > 0);
+
+  if (!linesHaveText) {
+    const explicitLines = plainText.split('\n');
+    const lineIndex = Math.max(0, explicitLines.length - 1);
+    const targetLine = lines[Math.min(lineIndex, lines.length - 1)] ?? lines[0];
+    const indexInLine = explicitLines[lineIndex]?.length ?? 0;
+    const linePlain = explicitLines[lineIndex] ?? '';
+    const progress = linePlain.length > 0 ? indexInLine / linePlain.length : 1;
+
+    return {
+      line: targetLine,
+      x: targetLine.x + targetLine.width * progress,
+      y: targetLine.y,
+    };
+  }
+
+  let count = 0;
+  for (const line of lines) {
+    const lineText = line.text ?? '';
+    const nextCount = count + lineText.length;
+
+    if (charIndex <= nextCount) {
+      const indexInLine = charIndex - count;
+      const progress = lineText.length > 0 ? indexInLine / lineText.length : 0;
+      return {
+        line,
+        x: line.x + line.width * progress,
+        y: line.y,
+      };
+    }
+
+    count = nextCount;
+  }
+
+  const lastLine = lines[lines.length - 1];
+  return {
+    line: lastLine,
+    x: lastLine.x + lastLine.width,
+    y: lastLine.y,
+  };
+}
+
+function getCaretPosition(lines: TextLayoutLine[], charIndex: number, plainText: string): CaretPosition {
+  const { line, x, y } = getCursorPositionFromLines(lines, charIndex, plainText);
+  const baseline = getCaretBaselineOffset(line);
+
+  return {
+    x: HORIZONTAL_PADDING + x,
+    y: VERTICAL_PADDING + y + baseline + BASELINE_NUDGE - CARET_HEIGHT,
+  };
+}
 
 interface MentionComposerInputProps extends TextInputProps {
   label?: string;
@@ -155,8 +264,13 @@ export const MentionComposerInput = React.forwardRef<TextInput, MentionComposerI
     );
     const inputRef = useRef<TextInput>(null);
     const scrollToFocus = useKeyboardFocusScroll();
+    const [caretVisible, setCaretVisible] = useState(true);
+    const [caretPos, setCaretPos] = useState<CaretPosition | null>(null);
     const isReadOnly = editable === false;
     const textValue = typeof value === 'string' ? value : '';
+    const safeCursor = Math.max(0, Math.min(cursor, textValue.length));
+    const textBeforeCursor = textValue.slice(0, safeCursor);
+    const textAfterCursor = textValue.slice(safeCursor);
 
     React.useImperativeHandle(ref, () => inputRef.current as TextInput);
 
@@ -172,6 +286,40 @@ export const MentionComposerInput = React.forwardRef<TextInput, MentionComposerI
       [textValue, members, cursor]
     );
 
+    const partsBeforeCursor = useMemo(
+      () => splitComposerBodyParts(textBeforeCursor, members, safeCursor),
+      [members, safeCursor, textBeforeCursor]
+    );
+
+    const partsAfterCursor = useMemo(
+      () => splitComposerBodyParts(textAfterCursor, members, 0),
+      [members, textAfterCursor]
+    );
+
+    const showCustomCaret = focused && !isReadOnly;
+
+    const handleCaretLayout = useCallback(
+      (event: NativeSyntheticEvent<TextLayoutEventData>) => {
+        if (!showCustomCaret) return;
+        setCaretPos(getCaretPosition(event.nativeEvent.lines, textBeforeCursor.length, textBeforeCursor));
+      },
+      [partsAfterCursor, partsBeforeCursor, showCustomCaret, textBeforeCursor]
+    );
+
+    useEffect(() => {
+      if (!showCustomCaret) {
+        setCaretVisible(true);
+        setCaretPos(null);
+        return;
+      }
+
+      const interval = setInterval(() => {
+        setCaretVisible((visible) => !visible);
+      }, 530);
+
+      return () => clearInterval(interval);
+    }, [showCustomCaret]);
+
     const handleContentSizeChange: TextInputProps['onContentSizeChange'] = (event) => {
       if (autoGrow) {
         const nextHeight = Math.max(
@@ -181,6 +329,15 @@ export const MentionComposerInput = React.forwardRef<TextInput, MentionComposerI
         setInputHeight(nextHeight);
       }
       onContentSizeChange?.(event);
+
+      if (focused && !isReadOnly) {
+        requestAnimationFrame(() => {
+          scrollFocusedInputIntoView(scrollToFocus, inputRef.current);
+        });
+        setTimeout(() => {
+          scrollFocusedInputIntoView(scrollToFocus, inputRef.current);
+        }, 100);
+      }
     };
 
     const resolvedInputHeight = autoGrow ? (inputHeight ?? minInputHeight) : minInputHeight;
@@ -208,11 +365,20 @@ export const MentionComposerInput = React.forwardRef<TextInput, MentionComposerI
             ]}
           >
           <View style={styles.overlay} pointerEvents="none">
-            <Text style={styles.overlayText}>
-              {textValue.length > 0
-                ? renderCommentBodyParts(parts, 'composer')
-                : null}
-            </Text>
+            {showCustomCaret ? (
+              <Text style={styles.overlayText} onTextLayout={handleCaretLayout}>
+                {textBeforeCursor.length > 0
+                  ? renderCommentBodyParts(partsBeforeCursor, 'composer')
+                  : null}
+                {textAfterCursor.length > 0
+                  ? renderCommentBodyParts(partsAfterCursor, 'composer')
+                  : null}
+              </Text>
+            ) : textValue.length > 0 ? (
+              <Text style={styles.overlayText}>
+                {renderCommentBodyParts(parts, 'composer')}
+              </Text>
+            ) : null}
           </View>
           <TextInput
             ref={inputRef}
@@ -230,6 +396,7 @@ export const MentionComposerInput = React.forwardRef<TextInput, MentionComposerI
               autoGrow ? { height: resolvedInputHeight } : null,
               style,
             ]}
+            caretHidden={showCustomCaret}
             caretColor={colors.text}
             selectionColor={colors.primaryLight}
             showSoftInputOnFocus={!isReadOnly}
@@ -245,6 +412,19 @@ export const MentionComposerInput = React.forwardRef<TextInput, MentionComposerI
               onBlur?.(event);
             }}
           />
+          {showCustomCaret && caretPos && caretVisible ? (
+            <View
+              collapsable={false}
+              pointerEvents="none"
+              style={[
+                styles.customCaret,
+                {
+                  left: caretPos.x,
+                  top: caretPos.y,
+                },
+              ]}
+            />
+          ) : null}
           </View>
         </View>
       </View>
@@ -325,6 +505,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
+    overflow: 'visible',
   },
   inputWrapperFocused: {
     borderColor: colors.primary,
@@ -336,14 +517,30 @@ const styles = StyleSheet.create({
   },
   overlayText: {
     ...commentMentionStyles.bodyTextComposer,
+    ...androidTextMetrics,
+    alignSelf: 'stretch',
+  },
+  customCaret: {
+    position: 'absolute',
+    width: CARET_WIDTH,
+    height: CARET_HEIGHT,
+    backgroundColor: colors.text,
+    borderRadius: 1,
+    zIndex: 10,
+    ...Platform.select({
+      android: {
+        elevation: 10,
+      },
+    }),
   },
   input: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: COMPOSER_FONT_SIZE,
+    lineHeight: COMPOSER_LINE_HEIGHT,
     color: 'transparent',
     backgroundColor: 'transparent',
     textAlignVertical: 'top',
+    ...androidTextMetrics,
   },
 });

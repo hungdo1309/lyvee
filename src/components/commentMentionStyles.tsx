@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { Platform, StyleSheet, Text } from 'react-native';
 import { colors } from '../constants/theme';
 import { CommentBodyPart } from '../utils/commentMentions';
 
@@ -8,6 +8,12 @@ export const commentMentionStyles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
     lineHeight: 22,
+    ...Platform.select({
+      android: {
+        includeFontPadding: false,
+        textAlignVertical: 'top' as const,
+      },
+    }),
   },
   bodyTextComment: {
     color: colors.text,
@@ -20,6 +26,12 @@ export const commentMentionStyles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     backgroundColor: colors.primaryLight,
+    ...Platform.select({
+      android: {
+        includeFontPadding: false,
+        textAlignVertical: 'top' as const,
+      },
+    }),
   },
   mentionTextComment: {
     color: colors.primaryDark,
