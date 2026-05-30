@@ -10,7 +10,6 @@ import {
   or,
   and,
   onSnapshot,
-  orderBy,
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -22,7 +21,6 @@ import {
   computeVisibleTo,
   filterVisibleItems,
   isItemVisibleToMember,
-  itemNeedsVisibleToBackfill,
 } from '../utils/itemVisibility';
 import { canUserCompleteTask } from '../utils/assignees';
 import { normalizeReminderOffset } from '../utils/reminders';
@@ -32,13 +30,13 @@ import {
   notifyItemDeleted,
   notifyItemUpdated,
 } from './itemNotifications';
+import { deleteCommentsForItem } from './comments';
+import { fetchGroupMemberIds } from './groupMemberIds';
 
 export { filterVisibleItems, isItemVisibleToMember };
 
 async function getGroupMemberIds(groupId: string): Promise<string[]> {
-  const snap = await getDoc(doc(db, 'groups', groupId));
-  if (!snap.exists()) return [];
-  return (snap.data() as Group).members ?? [];
+  return fetchGroupMemberIds(groupId);
 }
 
 function shouldRefreshVisibleTo(
@@ -46,7 +44,6 @@ function shouldRefreshVisibleTo(
   item: Item | null | undefined
 ): boolean {
   if (!item) return true;
-  if (itemNeedsVisibleToBackfill(item)) return true;
   return (
     updates.visibility !== undefined ||
     updates.allowedMembers !== undefined ||
@@ -68,10 +65,6 @@ function mergeItemState(
       updates.title !== undefined
         ? String(payload.title)
         : base.title,
-    notes:
-      updates.notes !== undefined
-        ? String(payload.notes)
-        : base.notes,
     tags:
       updates.tags !== undefined
         ? (payload.tags as string[])
@@ -89,9 +82,10 @@ async function applyVisibleTo(
   itemId: string,
   base: Item,
   updates: Partial<ItemInput>,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  groupMembers?: string[]
 ): Promise<void> {
-  const members = await getGroupMemberIds(base.groupId);
+  const members = groupMembers ?? (await getGroupMemberIds(base.groupId));
   const merged = mergeItemState(itemId, base, updates, payload);
   payload.visibleTo = computeVisibleTo(merged, members);
 }
@@ -112,7 +106,6 @@ function normalizeItemInput(input: ItemInput): ItemInput {
   return {
     ...input,
     title: input.title.trim(),
-    notes: input.notes.trim(),
     tags: normalizeTags(input.tags ?? []),
     allowedMembers: input.visibility === 'custom' ? input.allowedMembers : [],
     completedOccurrences: input.completedOccurrences ?? [],
@@ -143,7 +136,8 @@ export function validateItemInput(input: ItemInput): string | null {
 
 export async function createItem(
   input: ItemInput,
-  userId: string
+  userId: string,
+  groupMembers?: string[]
 ): Promise<Item> {
   const normalized = normalizeItemInput(input);
   const error = validateItemInput(normalized);
@@ -151,7 +145,7 @@ export async function createItem(
 
   const id = normalized.id ?? doc(collection(db, 'items')).id;
   const now = new Date().toISOString();
-  const members = await getGroupMemberIds(normalized.groupId);
+  const members = groupMembers ?? (await getGroupMemberIds(normalized.groupId));
   const item: Item = {
     ...normalized,
     id,
@@ -178,7 +172,8 @@ export async function updateItem(
   updates: Partial<ItemInput>,
   actorId?: string,
   sendPush = true,
-  existingItem?: Item | null
+  existingItem?: Item | null,
+  groupMembers?: string[]
 ): Promise<void> {
   const existing =
     existingItem ?? (actorId && sendPush ? await getItem(itemId) : null);
@@ -187,7 +182,6 @@ export async function updateItem(
     updatedAt: new Date().toISOString(),
   };
   if (updates.title !== undefined) payload.title = updates.title.trim();
-  if (updates.notes !== undefined) payload.notes = updates.notes.trim();
   if (updates.tags !== undefined) payload.tags = normalizeTags(updates.tags);
   if (updates.visibility !== undefined && updates.visibility !== 'custom') {
     payload.allowedMembers = [];
@@ -205,7 +199,7 @@ export async function updateItem(
     if (!resolvedBase) {
       throw new Error('Item not found');
     }
-    await applyVisibleTo(itemId, resolvedBase, updates, payload);
+    await applyVisibleTo(itemId, resolvedBase, updates, payload, groupMembers);
   }
 
   await setDoc(doc(db, 'items', itemId), payload, { merge: true });
@@ -221,6 +215,7 @@ export async function deleteItem(
   existingItem?: Item | null
 ): Promise<void> {
   const existing = existingItem ?? (actorId ? await getItem(itemId) : null);
+  await deleteCommentsForItem(itemId);
   await deleteDoc(doc(db, 'items', itemId));
   if (actorId && existing) {
     await notifyItemDeleted(existing, actorId);
@@ -235,55 +230,27 @@ export async function deleteItemsForGroup(groupId: string): Promise<void> {
 
   if (snapshot.empty) return;
 
+  const itemIds = snapshot.docs.map((docSnap) => docSnap.id);
+  await Promise.all(itemIds.map((itemId) => deleteCommentsForItem(itemId)));
+
   for (let i = 0; i < snapshot.docs.length; i += FIRESTORE_BATCH_LIMIT) {
     const batch = writeBatch(db);
-    snapshot.docs
-      .slice(i, i + FIRESTORE_BATCH_LIMIT)
-      .forEach((docSnap) => batch.delete(docSnap.ref));
+    const slice = snapshot.docs.slice(i, i + FIRESTORE_BATCH_LIMIT);
+    for (const docSnap of slice) {
+      batch.delete(docSnap.ref);
+    }
     await batch.commit();
   }
 }
 
-export async function backfillVisibleToForGroup(
-  groupId: string,
-  groupMembers: string[]
-): Promise<void> {
-  const q = query(
-    collection(db, 'items'),
-    where('groupId', '==', groupId),
-    where('visibility', 'in', ['private', 'custom'])
-  );
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) return;
-
-  let batch = writeBatch(db);
-  let batchSize = 0;
-
-  for (const docSnap of snapshot.docs) {
-    const item = docSnap.data() as Item;
-    if (!itemNeedsVisibleToBackfill(item)) continue;
-
-    batch.update(docSnap.ref, {
-      visibleTo: computeVisibleTo(item, groupMembers),
-    });
-    batchSize += 1;
-
-    if (batchSize >= FIRESTORE_BATCH_LIMIT) {
-      await batch.commit();
-      batch = writeBatch(db);
-      batchSize = 0;
-    }
-  }
-
-  if (batchSize > 0) {
-    await batch.commit();
-  }
+function parseItem(docId: string, data: Record<string, unknown>): Item {
+  return { id: docId, ...data } as Item;
 }
 
 export async function getItem(itemId: string): Promise<Item | null> {
   const snap = await getDoc(doc(db, 'items', itemId));
   if (!snap.exists()) return null;
-  return snap.data() as Item;
+  return parseItem(snap.id, snap.data() as Record<string, unknown>);
 }
 
 export function subscribeToItem(
@@ -293,7 +260,7 @@ export function subscribeToItem(
   return onSnapshot(
     doc(db, 'items', itemId),
     (snap) => {
-      callback(snap.exists() ? (snap.data() as Item) : null);
+      callback(snap.exists() ? parseItem(snap.id, snap.data() as Record<string, unknown>) : null);
     },
     (error) => {
       console.warn('[items] subscribeToItem:', error.code, error.message);
@@ -306,7 +273,8 @@ export function subscribeToItem(
 export async function toggleItemComplete(
   item: Item,
   occurrenceDate?: string,
-  actorId?: string
+  actorId?: string,
+  groupMemberIds?: string[]
 ): Promise<void> {
   if (item.type !== 'task') return;
   if (!canUserCompleteTask(item, actorId)) {
@@ -317,7 +285,7 @@ export async function toggleItemComplete(
     const completed = !item.completed;
     await updateItem(item.id, { completed }, actorId, false, item);
     if (actorId && completed) {
-      await notifyItemCompleted(item, actorId);
+      await notifyItemCompleted(item, actorId, undefined, groupMemberIds);
     }
     return;
   }
@@ -331,45 +299,12 @@ export async function toggleItemComplete(
 
   await updateItem(item.id, { completedOccurrences }, actorId, false, item);
   if (actorId && isCompleting) {
-    await notifyItemCompleted(item, actorId, occurrenceDate);
+    await notifyItemCompleted(item, actorId, occurrenceDate, groupMemberIds);
   }
 }
 
-export function subscribeToGroupItems(
-  groupId: string,
-  userId: string,
-  callback: (items: Item[]) => void
-): () => void {
-  return subscribeToAllGroupItems(groupId, (items) => {
-    callback(items.filter((item) => isItemVisibleToMember(item, userId)));
-  });
-}
-
-/** All items in a group — used for group-level counts visible to every member. */
-export function subscribeToAllGroupItems(
-  groupId: string,
-  callback: (items: Item[]) => void
-): () => void {
-  const q = query(
-    collection(db, 'items'),
-    where('groupId', '==', groupId),
-    orderBy('dateTime', 'asc')
-  );
-
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      callback(snapshot.docs.map((d) => d.data() as Item));
-    },
-    (error) => {
-      console.warn('[items] subscribeToAllGroupItems:', error.code, error.message);
-      callback([]);
-    }
-  );
-}
-
 function sortItems(items: Item[]): Item[] {
-  return items.sort((a, b) => {
+  return [...items].sort((a, b) => {
     if (!a.dateTime && !b.dateTime) return 0;
     if (!a.dateTime) return 1;
     if (!b.dateTime) return -1;
@@ -396,7 +331,7 @@ function subscribeToGroupItemQuery(
     q,
     (snapshot) => {
       const items = dedupeItemsById(
-        snapshot.docs.map((d) => d.data() as Item)
+        snapshot.docs.map((d) => parseItem(d.id, d.data() as Record<string, unknown>))
       ).filter((item) => isItemVisibleToMember(item, userId));
       onItems(items);
     },

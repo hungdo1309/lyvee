@@ -4,6 +4,12 @@ export function getFirstName(name: string): string {
   return parts[0] ?? name.trim();
 }
 
+/** Last name only (ignores middle names). */
+export function getLastName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return parts.length > 1 ? parts[parts.length - 1] : '';
+}
+
 /**
  * Avatar initials from first + last name.
  * Middle names are ignored, e.g. "John Michael Paul Doe" → "JD".

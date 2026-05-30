@@ -16,6 +16,7 @@ interface MemberPickerProps {
   onChange: (ids: string[]) => void;
   label?: string;
   emptyMessage?: string;
+  readOnly?: boolean;
 }
 
 export function MemberPicker({
@@ -24,6 +25,7 @@ export function MemberPicker({
   onChange,
   label = 'Who can see this',
   emptyMessage = 'No members in this group yet.',
+  readOnly = false,
 }: MemberPickerProps) {
   const toggleMember = (memberId: string) => {
     if (selectedIds.includes(memberId)) {
@@ -46,13 +48,16 @@ export function MemberPicker({
     <View style={styles.container}>
       <Text style={styles.sectionLabel}>{label}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {members.map((member) => {
+        {(readOnly ? members.filter((member) => selectedIds.includes(member.id)) : members).map(
+          (member) => {
           const selected = selectedIds.includes(member.id);
           return (
             <TouchableOpacity
               key={member.id}
               style={[styles.chip, selected && styles.chipSelected]}
-              onPress={() => toggleMember(member.id)}
+              onPress={readOnly ? undefined : () => toggleMember(member.id)}
+              disabled={readOnly}
+              activeOpacity={readOnly ? 1 : 0.7}
             >
               <View style={[styles.avatar, selected && styles.avatarSelected]}>
                 <Text style={[styles.avatarText, selected && styles.avatarTextSelected]}>
@@ -66,6 +71,9 @@ export function MemberPicker({
           );
         })}
       </ScrollView>
+      {readOnly && selectedIds.length === 0 ? (
+        <Text style={styles.empty}>None</Text>
+      ) : null}
     </View>
   );
 }

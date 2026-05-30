@@ -22,6 +22,7 @@ interface ItemDateTimeFieldProps {
   onChange: (date: Date) => void;
   dateOnly?: boolean;
   sheetTitle?: string;
+  readOnly?: boolean;
 }
 
 type PickerMode = 'date' | 'time';
@@ -49,6 +50,7 @@ export function ItemDateTimeField({
   onChange,
   dateOnly = false,
   sheetTitle = 'Date & Time',
+  readOnly = false,
 }: ItemDateTimeFieldProps) {
   const insets = useSafeAreaInsets();
   const [visible, setVisible] = useState(false);
@@ -99,8 +101,12 @@ export function ItemDateTimeField({
     <>
       <TouchableOpacity
         style={styles.field}
-        onPress={() => setVisible(true)}
-        accessibilityRole="button"
+        onPress={() => {
+          if (!readOnly) setVisible(true);
+        }}
+        disabled={readOnly}
+        activeOpacity={readOnly ? 1 : 0.7}
+        accessibilityRole={readOnly ? 'text' : 'button'}
         accessibilityLabel={fieldAccessibilityLabel}
       >
         <View style={styles.iconWrap}>
@@ -113,9 +119,12 @@ export function ItemDateTimeField({
             <Text style={styles.timeLine}>{format(value, 'h:mm a')}</Text>
           ) : null}
         </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        {!readOnly ? (
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        ) : null}
       </TouchableOpacity>
 
+      {!readOnly ? (
       <Modal
         visible={visible}
         transparent
@@ -245,6 +254,7 @@ export function ItemDateTimeField({
           </Pressable>
         </Pressable>
       </Modal>
+      ) : null}
     </>
   );
 }

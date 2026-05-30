@@ -71,6 +71,8 @@ export interface Group {
   members: string[];
   inviteCode: string;
   createdAt: string;
+  /** Set after legacy visibleTo backfill so login skips repeat scans. */
+  visibleToMigrated?: boolean;
 }
 
 export interface GroupInvite {
@@ -92,7 +94,6 @@ export interface Item {
   /** Indexed list of member IDs who can read this item in Firestore. */
   visibleTo?: string[];
   assignedTo: string[];
-  notes: string;
   tags: string[];
   /** When to notify assignees (or visible members if unassigned). */
   reminderOffset?: ItemReminderOffset;

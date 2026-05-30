@@ -8,7 +8,7 @@ import React, {
   useMemo,
 } from 'react';
 import { subscribeToUserGroups } from '../services/groups';
-import { backfillVisibleToForGroup, createAllUserItemsSubscription } from '../services/items';
+import { createAllUserItemsSubscription } from '../services/items';
 import { syncItemNotifications } from '../services/notifications';
 import {
   saveActiveGroupSession,
@@ -36,6 +36,7 @@ interface AppContextValue {
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
+const EMPTY_GROUP_ITEMS: Item[] = [];
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { user, firebaseUser } = useAuth();
@@ -52,7 +53,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const itemsSubscriptionRef = useRef<ReturnType<
     typeof createAllUserItemsSubscription
   > | null>(null);
-  const visibleToBackfillRef = useRef<Set<string>>(new Set());
 
   const groupIdsKey = useMemo(
     () => groups.map((group) => group.id).sort().join(','),
@@ -76,7 +76,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setItemsReady(false);
       userPickedGroupRef.current = false;
       initialGroupAppliedRef.current = false;
-      visibleToBackfillRef.current.clear();
       return;
     }
 
@@ -102,19 +101,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     return unsubGroups;
   }, [user, firebaseUser]);
-
-  useEffect(() => {
-    if (!user || !firebaseUser || groups.length === 0) return;
-
-    for (const group of groups) {
-      if (visibleToBackfillRef.current.has(group.id)) continue;
-      visibleToBackfillRef.current.add(group.id);
-      backfillVisibleToForGroup(group.id, group.members).catch((error) => {
-        visibleToBackfillRef.current.delete(group.id);
-        console.warn('[items] visibleTo backfill failed:', error);
-      });
-    }
-  }, [user, firebaseUser, groupIdsKey]);
 
   useEffect(() => {
     if (!user || !firebaseUser) {
@@ -220,34 +206,64 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setOnboardingComplete(true);
   }, [user]);
 
-  const activeGroup =
-    groups.find((group) => group.id === activeGroupId) ?? null;
+  const activeGroup = useMemo(
+    () => groups.find((group) => group.id === activeGroupId) ?? null,
+    [groups, activeGroupId]
+  );
+
+  const itemsByGroup = useMemo(() => {
+    const map = new Map<string, Item[]>();
+    for (const item of items) {
+      const groupItems = map.get(item.groupId);
+      if (groupItems) {
+        groupItems.push(item);
+      } else {
+        map.set(item.groupId, [item]);
+      }
+    }
+    return map;
+  }, [items]);
 
   const getGroupItems = useCallback(
-    (groupId: string) => items.filter((item) => item.groupId === groupId),
-    [items]
+    (groupId: string) => itemsByGroup.get(groupId) ?? EMPTY_GROUP_ITEMS,
+    [itemsByGroup]
   );
 
   const ready = sessionLoaded && groupsLoaded && itemsReady;
   const loading = !ready && !!user;
 
+  const contextValue = useMemo(
+    () => ({
+      groups,
+      items,
+      activeGroup,
+      hasSelectedGroup,
+      onboardingComplete,
+      ready,
+      setActiveGroupId,
+      selectGroup,
+      clearGroupSelection,
+      completeOnboarding,
+      loading,
+      getGroupItems,
+    }),
+    [
+      groups,
+      items,
+      activeGroup,
+      hasSelectedGroup,
+      onboardingComplete,
+      ready,
+      selectGroup,
+      clearGroupSelection,
+      completeOnboarding,
+      loading,
+      getGroupItems,
+    ]
+  );
+
   return (
-    <AppContext.Provider
-      value={{
-        groups,
-        items,
-        activeGroup,
-        hasSelectedGroup,
-        onboardingComplete,
-        ready,
-        setActiveGroupId,
-        selectGroup,
-        clearGroupSelection,
-        completeOnboarding,
-        loading,
-        getGroupItems,
-      }}
-    >
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );

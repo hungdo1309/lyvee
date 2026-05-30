@@ -65,7 +65,6 @@ export default function CreateItemScreen() {
   }, []);
 
   const [title, setTitle] = useState('');
-  const [notes, setNotes] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [type, setType] = useState<ItemType>('task');
   const [visibility, setVisibility] = useState<ItemVisibility>('everyone');
@@ -123,13 +122,13 @@ export default function CreateItemScreen() {
           visibility,
           allowedMembers: visibility === 'custom' ? allowedMembers : [],
           assignedTo,
-          notes: notes.trim(),
           tags,
           reminderOffset: normalizeReminderOffset(hasDate, type, reminderOffset),
           completed: false,
           completedOccurrences: [],
         },
-        user.id
+        user.id,
+        selectedGroup?.members
       );
       dismissItemFlow();
     } catch (error: unknown) {
@@ -229,16 +228,6 @@ export default function CreateItemScreen() {
           </>
         )}
       </View>
-
-      <Input
-        label="Notes"
-        value={notes}
-        onChangeText={setNotes}
-        placeholder="Additional details..."
-        multiline
-        numberOfLines={3}
-        style={styles.notesInput}
-      />
     </ItemFormScreen>
   );
 }
@@ -264,9 +253,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.primary,
     fontWeight: '500',
-  },
-  notesInput: {
-    minHeight: 80,
-    textAlignVertical: 'top',
   },
 });

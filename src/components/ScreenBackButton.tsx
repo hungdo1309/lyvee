@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { colors } from '../constants/theme';
@@ -9,12 +9,14 @@ interface ScreenBackButtonProps {
   label?: string;
   onPress?: () => void;
   showChevron?: boolean;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function ScreenBackButton({
   label = 'Back',
   onPress,
   showChevron = false,
+  style,
 }: ScreenBackButtonProps) {
   const formattedLabel = formatButtonLabel(label);
 
@@ -22,7 +24,7 @@ export function ScreenBackButton({
     <TouchableOpacity
       onPress={onPress ?? (() => router.back())}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      style={[styles.button, showChevron && styles.buttonWithChevron]}
+      style={[styles.button, showChevron && styles.buttonWithChevron, style]}
       accessibilityRole="button"
       accessibilityLabel={formattedLabel}
     >

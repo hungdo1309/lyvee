@@ -36,7 +36,7 @@ import { colors, layout, radius, spacing, typography } from '../../../src/consta
 
 export default function CalendarScreen() {
   const { user } = useAuth();
-  const { groups, items, activeGroup, selectGroup, loading } = useApp();
+  const { groups, activeGroup, selectGroup, loading, getGroupItems } = useApp();
   const [filters, setFilters] = useState<CalendarFilters>(DEFAULT_CALENDAR_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() => format(new Date(), 'yyyy-MM-dd'));
@@ -44,10 +44,7 @@ export default function CalendarScreen() {
 
   const { members: groupMembers } = useGroupMembers(activeGroup?.members ?? []);
 
-  const groupItems = useMemo(() => {
-    if (!activeGroup) return [];
-    return items.filter((item) => item.groupId === activeGroup.id);
-  }, [items, activeGroup]);
+  const groupItems = activeGroup ? getGroupItems(activeGroup.id) : [];
 
   const availableTags = useMemo(
     () => collectTagsFromItems(groupItems),
@@ -72,8 +69,21 @@ export default function CalendarScreen() {
     await toggleItemComplete(
       instance.item,
       instance.isRecurring ? instance.occurrenceDate : undefined,
-      user?.id
+      user?.id,
+      activeGroup?.members
     );
+  };
+
+  const handleOpenItem = (instance: ItemInstance) => {
+    router.push({
+      pathname: '/(app)/item/[id]',
+      params: {
+        id: instance.itemId,
+        ...(instance.occurrenceDate
+          ? { occurrence: instance.occurrenceDate }
+          : {}),
+      },
+    });
   };
 
   const handleEditItem = (instance: ItemInstance) => {
@@ -81,6 +91,7 @@ export default function CalendarScreen() {
       pathname: '/(app)/item/[id]',
       params: {
         id: instance.itemId,
+        edit: '1',
         ...(instance.occurrenceDate
           ? { occurrence: instance.occurrenceDate }
           : {}),
@@ -170,6 +181,7 @@ export default function CalendarScreen() {
             <CalendarView
               items={filteredItems}
               onToggleComplete={handleToggleComplete}
+              onOpenItem={handleOpenItem}
               onEditItem={handleEditItem}
               onDeleteItem={handleDeleteItem}
               groupMembers={groupMembers}

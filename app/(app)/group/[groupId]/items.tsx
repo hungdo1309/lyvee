@@ -41,7 +41,7 @@ function getFilterColor(filter: ItemType | 'all'): string {
 export default function GroupItemsScreen() {
   const { groupId: rawGroupId } = useLocalSearchParams<{ groupId: string }>();
   const groupId = Array.isArray(rawGroupId) ? rawGroupId[0] : rawGroupId;
-  const { groups, items, activeGroup, selectGroup, loading } = useApp();
+  const { groups, activeGroup, selectGroup, loading, getGroupItems } = useApp();
   const { user } = useAuth();
   const [filter, setFilter] = useState<ItemType | 'all'>('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -84,10 +84,8 @@ export default function GroupItemsScreen() {
     setExpandedInstanceKey(null);
   };
 
-  const groupItems = useMemo(() => {
-    const scopedGroupId = viewGroup?.id ?? groupId;
-    return scopedGroupId ? items.filter((item) => item.groupId === scopedGroupId) : [];
-  }, [items, viewGroup?.id, groupId]);
+  const scopedGroupId = viewGroup?.id ?? groupId;
+  const groupItems = scopedGroupId ? getGroupItems(scopedGroupId) : [];
 
   const availableTags = useMemo(
     () => collectTagsFromItems(groupItems),
@@ -133,7 +131,8 @@ export default function GroupItemsScreen() {
     await toggleItemComplete(
       instance.item,
       instance.isRecurring ? instance.occurrenceDate : undefined,
-      user?.id
+      user?.id,
+      viewGroup?.members
     );
   };
 
@@ -144,11 +143,24 @@ export default function GroupItemsScreen() {
     });
   };
 
+  const handleOpenItem = (instance: ItemInstance) => {
+    router.push({
+      pathname: '/(app)/item/[id]',
+      params: {
+        id: instance.itemId,
+        ...(instance.occurrenceDate
+          ? { occurrence: instance.occurrenceDate }
+          : {}),
+      },
+    });
+  };
+
   const handleEditItem = (instance: ItemInstance) => {
     router.push({
       pathname: '/(app)/item/[id]',
       params: {
         id: instance.itemId,
+        edit: '1',
         ...(instance.occurrenceDate
           ? { occurrence: instance.occurrenceDate }
           : {}),
@@ -269,6 +281,7 @@ export default function GroupItemsScreen() {
                 current === instance.instanceKey ? null : instance.instanceKey
               )
             }
+            onView={() => handleOpenItem(instance)}
             onToggleComplete={
               canUserCompleteTask(instance.item, user?.id)
                 ? () => handleToggleComplete(instance)

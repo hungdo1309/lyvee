@@ -10,12 +10,14 @@ export type PushNotificationType =
   | 'item.created'
   | 'item.updated'
   | 'item.deleted'
-  | 'item.completed';
+  | 'item.completed'
+  | 'item.comment.mention';
 
 export interface PushNotificationData {
   type: PushNotificationType;
   groupId?: string;
   itemId?: string;
+  commentId?: string;
   occurrence?: string;
 }
 

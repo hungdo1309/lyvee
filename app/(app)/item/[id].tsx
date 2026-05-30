@@ -18,7 +18,7 @@ import { GroupPicker } from '../../../src/components/GroupPicker';
 import { ItemDateTimeField } from '../../../src/components/ItemDateTimeField';
 import { ReminderPicker } from '../../../src/components/ReminderPicker';
 import { useGroupMembers } from '../../../src/hooks/useGroupMembers';
-import { updateItem } from '../../../src/services/items';
+import { updateItem, deleteItem } from '../../../src/services/items';
 import { colors, spacing, itemTypeConfig, itemTypeSupportsRecurring } from '../../../src/constants/theme';
 import { itemFormLayout } from '../../../src/constants/itemFormLayout';
 import {
@@ -32,17 +32,26 @@ import {
 import { normalizeReminderOffset, resolveItemReminderOffset } from '../../../src/utils/reminders';
 import { toISODateTime } from '../../../src/utils/dates';
 import { getItemTags } from '../../../src/utils/tags';
+import {
+  canUserEditItem,
+  canUserViewItem,
+} from '../../../src/utils/itemVisibility';
 import { dismissItemFlow } from '../../../src/utils/navigation';
 import { ItemFormScreen } from '../../../src/components/ItemFormScreen';
 import { HeaderSaveButton } from '../../../src/components/HeaderSaveButton';
+import { HeaderDeleteButton } from '../../../src/components/HeaderDeleteButton';
+import { HeaderCancelButton } from '../../../src/components/HeaderCancelButton';
+import { ScreenBackButton } from '../../../src/components/ScreenBackButton';
+import { ItemComments } from '../../../src/components/ItemComments';
 
-export default function EditItemScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+export default function ItemDetailScreen() {
+  const { id, edit } = useLocalSearchParams<{ id: string; edit?: string }>();
   const { user } = useAuth();
   const { items, groups } = useApp();
 
   const item = useMemo(() => items.find((i) => i.id === id), [items, id]);
-  const isOwner = item?.createdBy === user?.id;
+  const canEdit = item ? canUserEditItem(item, user?.id) : false;
+  const canView = item ? canUserViewItem(item, user?.id) : false;
   const itemGroup = groups.find((g) => g.id === item?.groupId);
   const { members: groupMembers } = useGroupMembers(itemGroup?.members ?? []);
   const visibilityMembers = useMemo(
@@ -51,7 +60,6 @@ export default function EditItemScreen() {
   );
 
   const [title, setTitle] = useState('');
-  const [notes, setNotes] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [type, setType] = useState<ItemType>('task');
   const [visibility, setVisibility] = useState<ItemVisibility>('everyone');
@@ -62,11 +70,12 @@ export default function EditItemScreen() {
   const [dateTime, setDateTime] = useState(new Date());
   const [reminderOffset, setReminderOffset] = useState<ItemReminderOffset>('none');
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [isEditing, setIsEditing] = useState(edit === '1');
 
   const resetForm = useCallback(() => {
     if (!item) return;
     setTitle(item.title);
-    setNotes(item.notes);
     setTags(getItemTags(item));
     setType(item.type);
     setVisibility(item.visibility);
@@ -82,6 +91,43 @@ export default function EditItemScreen() {
     resetForm();
   }, [resetForm]);
 
+  useEffect(() => {
+    setIsEditing(edit === '1');
+  }, [edit, id]);
+
+  const handleCancelEdit = useCallback(() => {
+    resetForm();
+    setIsEditing(false);
+  }, [resetForm]);
+
+  const handleDelete = useCallback(async () => {
+    if (!item || !canEdit) return;
+    setDeleting(true);
+    try {
+      await deleteItem(item.id, user?.id, item);
+      dismissItemFlow();
+    } catch (error: unknown) {
+      appAlert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to delete item'
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }, [item, canEdit, user?.id]);
+
+  const handleDeletePress = useCallback(() => {
+    if (!item || !canEdit) return;
+    appAlert(
+      'Delete this item?',
+      `"${item.title}" will be permanently removed and can't be recovered.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete item', style: 'destructive', onPress: handleDelete },
+      ]
+    );
+  }, [item, canEdit, handleDelete]);
+
   const handleTypeChange = (next: ItemType) => {
     setType(next);
     if (!itemTypeSupportsRecurring(next)) {
@@ -93,7 +139,7 @@ export default function EditItemScreen() {
   };
 
   const handleSave = useCallback(async () => {
-    if (!item) return;
+    if (!item || !canEdit) return;
     if (!title.trim()) {
       appAlert('Error', 'Title is required');
       return;
@@ -108,7 +154,6 @@ export default function EditItemScreen() {
         item.id,
         {
           title: title.trim(),
-          notes: notes.trim(),
           type,
           visibility,
           allowedMembers: visibility === 'custom' ? allowedMembers : [],
@@ -122,9 +167,10 @@ export default function EditItemScreen() {
         },
         user?.id,
         true,
-        item
+        item,
+        itemGroup?.members
       );
-      dismissItemFlow();
+      setIsEditing(false);
     } catch (error: unknown) {
       appAlert(
         'Error',
@@ -135,8 +181,8 @@ export default function EditItemScreen() {
     }
   }, [
     item,
+    canEdit,
     title,
-    notes,
     type,
     visibility,
     allowedMembers,
@@ -158,20 +204,44 @@ export default function EditItemScreen() {
     );
   }
 
-  if (!isOwner) {
+  if (!canView) {
     return (
       <View style={styles.notFound}>
-        <Text style={styles.notFoundText}>You can only edit items you created.</Text>
+        <Text style={styles.notFoundText}>You do not have access to this item.</Text>
         <Button title="Go Back" variant="secondary" onPress={() => dismissItemFlow()} />
       </View>
     );
   }
 
+  const readOnly = !isEditing;
+
   return (
     <ItemFormScreen
-      title="Edit Item"
+      title={isEditing ? 'Edit Item' : 'View Item'}
+      leftAction={
+        isEditing ? (
+          <HeaderCancelButton onPress={handleCancelEdit} />
+        ) : (
+          <ScreenBackButton
+            label="Back to Home"
+            showChevron
+            onPress={() => dismissItemFlow()}
+            style={styles.headerBackButton}
+          />
+        )
+      }
       rightAction={
-        <HeaderSaveButton onPress={handleSave} loading={loading} />
+        isEditing ? (
+          <HeaderSaveButton onPress={handleSave} loading={loading} />
+        ) : canEdit ? (
+          <View style={styles.headerActions}>
+            <HeaderDeleteButton
+              onPress={handleDeletePress}
+              loading={deleting}
+            />
+            <HeaderSaveButton label="Edit" onPress={() => setIsEditing(true)} />
+          </View>
+        ) : undefined
       }
     >
       {itemGroup && (
@@ -181,8 +251,13 @@ export default function EditItemScreen() {
           readOnly
         />
       )}
-      <Input label="Title" value={title} onChangeText={setTitle} />
-      <TagInput tags={tags} onChange={setTags} />
+      <Input
+        label="Title"
+        value={title}
+        onChangeText={setTitle}
+        editable={!readOnly}
+      />
+      <TagInput tags={tags} onChange={setTags} readOnly={readOnly} />
       <ItemFormOptions
         type={type}
         visibility={visibility}
@@ -199,26 +274,36 @@ export default function EditItemScreen() {
         visibilityMembers={visibilityMembers}
         allowedMembers={allowedMembers}
         onAllowedMembersChange={setAllowedMembers}
+        readOnly={readOnly}
       />
       <View style={styles.dateSection}>
-        <View style={styles.dateHeader}>
+        {!readOnly ? (
+          <View style={styles.dateHeader}>
+            <Text style={styles.sectionLabel}>{itemTypeConfig[type].dateTimeLabel}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                if (hasDate) {
+                  setHasDate(false);
+                  setReminderOffset('none');
+                } else {
+                  setHasDate(true);
+                  setReminderOffset(defaultReminderForType(type));
+                }
+              }}
+            >
+              <Text style={styles.toggle}>
+                {hasDate ? 'Remove date' : 'Add date'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : hasDate ? (
           <Text style={styles.sectionLabel}>{itemTypeConfig[type].dateTimeLabel}</Text>
-          <TouchableOpacity
-            onPress={() => {
-              if (hasDate) {
-                setHasDate(false);
-                setReminderOffset('none');
-              } else {
-                setHasDate(true);
-                setReminderOffset(defaultReminderForType(type));
-              }
-            }}
-          >
-            <Text style={styles.toggle}>
-              {hasDate ? 'Remove date' : 'Add date'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        ) : (
+          <View style={styles.readOnlyBlock}>
+            <Text style={styles.sectionLabel}>{itemTypeConfig[type].dateTimeLabel}</Text>
+            <Text style={styles.readOnlyValue}>No date set</Text>
+          </View>
+        )}
         {hasDate && (
           <>
             <ItemDateTimeField
@@ -226,23 +311,23 @@ export default function EditItemScreen() {
               onChange={setDateTime}
               dateOnly={type === 'document'}
               sheetTitle={itemTypeConfig[type].dateTimeLabel}
+              readOnly={readOnly}
             />
             <ReminderPicker
               value={reminderOffset}
               onChange={setReminderOffset}
               assignedTo={assignedTo}
               groupMembers={groupMembers}
+              readOnly={readOnly}
             />
           </>
         )}
       </View>
-      <Input
-        label="Notes"
-        value={notes}
-        onChangeText={setNotes}
-        multiline
-        numberOfLines={3}
-        style={styles.notesInput}
+      <ItemComments
+        item={item}
+        groupMembers={groupMembers}
+        groupMemberIds={itemGroup?.members ?? []}
+        currentUserId={user?.id}
       />
     </ItemFormScreen>
   );
@@ -260,6 +345,14 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: spacing.md,
+  },
+  headerBackButton: {
+    marginBottom: 0,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   dateSection: {
     marginBottom: spacing.md,
@@ -282,8 +375,12 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '500',
   },
-  notesInput: {
-    minHeight: 80,
-    textAlignVertical: 'top',
+  readOnlyBlock: {
+    marginBottom: spacing.sm,
+  },
+  readOnlyValue: {
+    fontSize: 16,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
   },
 });

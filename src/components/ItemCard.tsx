@@ -21,11 +21,12 @@ interface ItemCardProps {
   assigneeLabel?: string | null;
   groupName?: string;
   isOwner?: boolean;
+  onView?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
 }
 
-export function ItemCard({
+export const ItemCard = React.memo(function ItemCard({
   instance,
   expanded,
   onToggleExpand,
@@ -34,6 +35,7 @@ export function ItemCard({
   assigneeLabel,
   groupName,
   isOwner = false,
+  onView,
   onEdit,
   onDelete,
 }: ItemCardProps) {
@@ -101,7 +103,7 @@ export function ItemCard({
 
   return (
     <Card
-      onPress={onToggleExpand}
+      onPress={onView ?? onToggleExpand}
       style={[
         instance.completed ? styles.completed : undefined,
         faded && styles.faded,
@@ -183,15 +185,8 @@ export function ItemCard({
                 </View>
               ) : null}
 
-              {item.notes ? (
-                <View style={styles.notesBlock}>
-                  <Text style={styles.sectionLabel}>Notes</Text>
-                  <Text style={styles.notesFull}>{item.notes}</Text>
-                </View>
-              ) : null}
-
               {upcomingInstances.length > 0 && (
-                <View style={styles.notesBlock}>
+                <View style={styles.upcomingBlock}>
                   <Text style={styles.sectionLabel}>Upcoming</Text>
                   {upcomingInstances.map((inst) => (
                     <Text key={inst.instanceKey} style={styles.upcomingRow}>
@@ -216,7 +211,7 @@ export function ItemCard({
       </View>
     </Card>
   );
-}
+});
 
 const styles = StyleSheet.create({
   row: {
@@ -335,7 +330,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginBottom: spacing.xs,
   },
-  notesBlock: {
+  upcomingBlock: {
     marginTop: spacing.md,
     backgroundColor: colors.background,
     padding: spacing.sm,
@@ -350,11 +345,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-  },
-  notesFull: {
-    fontSize: 15,
-    color: colors.text,
-    lineHeight: 22,
   },
   upcomingRow: {
     fontSize: 14,

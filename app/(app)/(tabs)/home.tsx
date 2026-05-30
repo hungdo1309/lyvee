@@ -38,7 +38,7 @@ import { colors, layout, radius, spacing, typography } from '../../../src/consta
 
 export default function HomeScreen() {
   const { user } = useAuth();
-  const { groups, items, activeGroup, selectGroup, loading } = useApp();
+  const { groups, activeGroup, selectGroup, loading, getGroupItems } = useApp();
   const [typeFilter, setTypeFilter] = useState<ItemTypeFilter>('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
@@ -55,10 +55,7 @@ export default function HomeScreen() {
     setExpandedInstanceKey(null);
   }, [activeGroup?.id]);
 
-  const groupItems = useMemo(() => {
-    if (!activeGroup) return [];
-    return items.filter((item) => item.groupId === activeGroup.id);
-  }, [items, activeGroup]);
+  const groupItems = activeGroup ? getGroupItems(activeGroup.id) : [];
 
   const availableTags = useMemo(
     () => collectTagsFromItems(groupItems),
@@ -89,8 +86,21 @@ export default function HomeScreen() {
     await toggleItemComplete(
       instance.item,
       instance.isRecurring ? instance.occurrenceDate : undefined,
-      user?.id
+      user?.id,
+      activeGroup?.members
     );
+  };
+
+  const handleOpenItem = (instance: ItemInstance) => {
+    router.push({
+      pathname: '/(app)/item/[id]',
+      params: {
+        id: instance.itemId,
+        ...(instance.occurrenceDate
+          ? { occurrence: instance.occurrenceDate }
+          : {}),
+      },
+    });
   };
 
   const handleEditItem = (instance: ItemInstance) => {
@@ -98,6 +108,7 @@ export default function HomeScreen() {
       pathname: '/(app)/item/[id]',
       params: {
         id: instance.itemId,
+        edit: '1',
         ...(instance.occurrenceDate
           ? { occurrence: instance.occurrenceDate }
           : {}),
@@ -247,6 +258,7 @@ export default function HomeScreen() {
                                     : instance.instanceKey
                                 )
                               }
+                              onView={() => handleOpenItem(instance)}
                               onToggleComplete={
                                 canUserCompleteTask(instance.item, user?.id)
                                   ? () => handleToggleComplete(instance)

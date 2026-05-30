@@ -17,6 +17,8 @@ web-build/
 # Environment
 .env
 .env.local
+*-firebase-adminsdk-*.json
+scripts/*.credentials.json
 
 # OS
 .DS_Store

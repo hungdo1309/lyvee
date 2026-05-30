@@ -1,5 +1,6 @@
 import { Group, Item, ItemInput } from '../types';
 import { getGroupAdminIds } from './groupRoles';
+import { isItemVisibleToMember } from './itemVisibility';
 
 export function uniqueIds(ids: string[]): string[] {
   return [...new Set(ids.filter(Boolean))];
@@ -30,12 +31,23 @@ export function getItemAssigneesAndCreator(item: Item, actorId: string): string[
   return excludeActor(actorId, uniqueIds([item.createdBy, ...item.assignedTo]));
 }
 
+export function getItemVisibleRecipients(
+  item: Item,
+  groupMemberIds: string[],
+  actorId: string
+): string[] {
+  const recipients =
+    item.visibleTo && item.visibleTo.length > 0
+      ? item.visibleTo
+      : groupMemberIds.filter((memberId) => isItemVisibleToMember(item, memberId));
+  return excludeActor(actorId, recipients);
+}
+
 export function itemHasMeaningfulChanges(
   before: Item,
   updates: Partial<ItemInput>
 ): boolean {
   if (updates.title !== undefined && updates.title.trim() !== before.title) return true;
-  if (updates.notes !== undefined && updates.notes.trim() !== before.notes) return true;
   if (updates.type !== undefined && updates.type !== before.type) return true;
   if (updates.dateTime !== undefined && updates.dateTime !== before.dateTime) return true;
   if (updates.visibility !== undefined && updates.visibility !== before.visibility) return true;

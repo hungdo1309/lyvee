@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,10 @@ import { colors, itemTypeConfig, radius, spacing, itemTypeSupportsRecurring } fr
 import { formatRecurringLabel } from '../utils/recurrence';
 import { RECURRING_PRESETS } from '../services/items';
 import { MemberPicker } from './MemberPicker';
+import {
+  scrollFocusedInputIntoView,
+  useKeyboardFocusScroll,
+} from './KeyboardAwareScrollView';
 
 interface OptionChipProps {
   label: string;
@@ -40,6 +44,28 @@ function OptionChip({ label, selected, onPress, color }: OptionChipProps) {
         {label}
       </Text>
     </TouchableOpacity>
+  );
+}
+
+function SelectedPill({ label, color }: { label: string; color?: string }) {
+  return (
+    <View
+      style={[
+        styles.chip,
+        styles.chipSelected,
+        color ? { backgroundColor: color + '20', borderColor: color } : null,
+      ]}
+    >
+      <Text
+        style={[
+          styles.chipText,
+          styles.chipTextSelected,
+          color ? { color } : null,
+        ]}
+      >
+        {label}
+      </Text>
+    </View>
   );
 }
 
@@ -81,6 +107,7 @@ interface ItemFormOptionsProps {
   allowedMembers?: string[];
   onAllowedMembersChange?: (ids: string[]) => void;
   hideType?: boolean;
+  readOnly?: boolean;
 }
 
 const TYPE_OPTIONS: ItemType[] = ['task', 'activity', 'document'];
@@ -115,9 +142,69 @@ export function ItemFormOptions({
   allowedMembers,
   onAllowedMembersChange,
   hideType = false,
+  readOnly = false,
 }: ItemFormOptionsProps) {
+  const intervalInputRef = useRef<TextInput>(null);
+  const scrollToFocus = useKeyboardFocusScroll();
   const isCustomSelected = recurringRule.frequency === 'custom';
   const showRecurring = itemTypeSupportsRecurring(type);
+
+  if (readOnly) {
+    return (
+      <View style={styles.container}>
+        {!hideType && (
+          <View style={styles.readOnlySection}>
+            <Text style={styles.sectionLabel}>Type</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.row}>
+              <SelectedPill
+                label={itemTypeConfig[type].label}
+                color={itemTypeConfig[type].color}
+              />
+            </ScrollView>
+          </View>
+        )}
+
+        {showRecurring && recurringRule.frequency !== 'none' && (
+          <View style={styles.readOnlySection}>
+            <Text style={styles.sectionLabel}>Repeat</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.row}>
+              <SelectedPill label={formatRecurringLabel(recurringRule)} />
+            </ScrollView>
+          </View>
+        )}
+
+        <View style={styles.readOnlySection}>
+          <Text style={styles.sectionLabel}>Visibility</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.row}>
+            <SelectedPill
+              label={visibility.charAt(0).toUpperCase() + visibility.slice(1)}
+            />
+          </ScrollView>
+        </View>
+
+        {visibility === 'custom' && visibilityMembers && onAllowedMembersChange && (
+          <MemberPicker
+            members={visibilityMembers}
+            selectedIds={allowedMembers ?? []}
+            onChange={onAllowedMembersChange}
+            label="Who can see this item"
+            readOnly
+          />
+        )}
+
+        {groupMembers && onAssignedToChange && (
+          <MemberPicker
+            members={groupMembers}
+            selectedIds={assignedTo ?? []}
+            onChange={onAssignedToChange}
+            label="Assign to"
+            emptyMessage="Add members to your group to assign items."
+            readOnly
+          />
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -155,6 +242,7 @@ export function ItemFormOptions({
               <View style={styles.customIntervalRow}>
                 <Text style={styles.customLabel}>Every</Text>
                 <TextInput
+                  ref={intervalInputRef}
                   style={styles.intervalInput}
                   value={String(recurringRule.interval ?? 1)}
                   onChangeText={(text) =>
@@ -163,6 +251,9 @@ export function ItemFormOptions({
                       frequency: 'custom',
                       interval: parseCustomInterval(text),
                     })
+                  }
+                  onFocus={() =>
+                    scrollFocusedInputIntoView(scrollToFocus, intervalInputRef.current)
                   }
                   keyboardType="number-pad"
                   maxLength={3}
@@ -311,5 +402,8 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: -spacing.xs,
     marginBottom: spacing.sm,
+  },
+  readOnlySection: {
+    marginBottom: spacing.xs,
   },
 });

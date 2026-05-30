@@ -183,8 +183,7 @@ function getReminderBody(item: Item, reminder: ItemReminderOffset): string {
     item.recurringRule.frequency !== 'none'
       ? ` · ${formatRecurringLabel(item.recurringRule)}`
       : '';
-  const notes = item.notes ? ` — ${item.notes.slice(0, 60)}` : '';
-  return `${when}${recurring}${notes}`;
+  return `${when}${recurring}`;
 }
 
 function triggerDateForOffset(

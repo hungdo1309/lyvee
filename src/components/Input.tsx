@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   TextInput,
@@ -9,6 +9,10 @@ import {
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { colors, radius, spacing, typography } from '../constants/theme';
+import {
+  scrollFocusedInputIntoView,
+  useKeyboardFocusScroll,
+} from './KeyboardAwareScrollView';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -17,12 +21,17 @@ interface InputProps extends TextInputProps {
 }
 
 export const Input = React.forwardRef<TextInput, InputProps>(function Input(
-  { label, error, highlight, style, onFocus, onBlur, secureTextEntry, ...props },
+  { label, error, highlight, style, onFocus, onBlur, secureTextEntry, editable, ...props },
   ref
 ) {
   const [focused, setFocused] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const inputRef = useRef<TextInput>(null);
+  const scrollToFocus = useKeyboardFocusScroll();
   const isPasswordField = secureTextEntry === true;
+  const isReadOnly = editable === false;
+
+  React.useImperativeHandle(ref, () => inputRef.current as TextInput);
 
   const handleBlur = (event: Parameters<NonNullable<TextInputProps['onBlur']>>[0]) => {
     setFocused(false);
@@ -35,21 +44,26 @@ export const Input = React.forwardRef<TextInput, InputProps>(function Input(
       {label && <Text style={styles.label}>{label}</Text>}
       <View style={styles.inputWrapper}>
         <TextInput
-          ref={ref}
+          ref={inputRef}
           placeholderTextColor={colors.textMuted}
           {...props}
+          editable={editable}
           style={[
             styles.input,
             isPasswordField && styles.inputWithToggle,
             highlight === 'success' && styles.inputSuccess,
             (highlight === 'error' || error) && styles.inputError,
-            focused && !error && !highlight && styles.inputFocused,
+            focused && !error && !highlight && !isReadOnly && styles.inputFocused,
             style,
           ]}
+          showSoftInputOnFocus={!isReadOnly}
           secureTextEntry={isPasswordField ? !passwordVisible : false}
           onFocus={(event) => {
             setFocused(true);
             onFocus?.(event);
+            if (!isReadOnly) {
+              scrollFocusedInputIntoView(scrollToFocus, inputRef.current);
+            }
           }}
           onBlur={handleBlur}
         />

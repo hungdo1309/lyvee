@@ -85,6 +85,7 @@ export async function createGroup(
     members: [ownerId],
     inviteCode: generateInviteCode(),
     createdAt: new Date().toISOString(),
+    visibleToMigrated: true,
   };
   await setDoc(doc(db, 'groups', id), group);
   await saveInviteMapping(group);

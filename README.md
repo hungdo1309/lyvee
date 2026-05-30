@@ -83,7 +83,7 @@ src/
 | `recurringRule` | object | Repeat schedule |
 | `visibility` | everyone · private · custom | Who can see it |
 | `assignedTo` | userId[] | Assigned members |
-| `notes` | string | Free-form details |
+| `tags` | string[] | Labels for filtering |
 
 ### Group
 

@@ -14,12 +14,14 @@ import {
 
 interface ItemFormScreenProps {
   title: string;
+  leftAction?: React.ReactNode;
   rightAction?: React.ReactNode;
   children: React.ReactNode;
 }
 
 export function ItemFormScreen({
   title,
+  leftAction,
   rightAction,
   children,
 }: ItemFormScreenProps) {
@@ -39,7 +41,7 @@ export function ItemFormScreen({
       >
         <View style={[styles.topBar, { height: getFormTopBarHeight() }]}>
           <View style={styles.side}>
-            <HeaderCancelButton />
+            {leftAction ?? <HeaderCancelButton />}
           </View>
           <View style={styles.titleWrap} pointerEvents="none">
             <Text style={styles.title} numberOfLines={1}>
@@ -101,7 +103,5 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  content: {
-    flexGrow: 1,
-  },
+  content: {},
 });

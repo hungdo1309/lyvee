@@ -22,6 +22,7 @@ interface ReminderPickerProps {
   assignedTo: string[];
   groupMembers: User[];
   disabled?: boolean;
+  readOnly?: boolean;
 }
 
 export function ReminderPicker({
@@ -30,12 +31,27 @@ export function ReminderPicker({
   assignedTo,
   groupMembers,
   disabled = false,
+  readOnly = false,
 }: ReminderPickerProps) {
   const [open, setOpen] = useState(false);
 
   if (disabled) return null;
 
   const hint = getReminderAudienceHint(assignedTo, groupMembers);
+
+  if (readOnly) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.sectionLabel}>Reminder</Text>
+        <View style={styles.pillRow}>
+          <View style={[styles.pill, styles.pillSelected]}>
+            <Text style={styles.pillTextSelected}>{getReminderOptionLabel(value)}</Text>
+          </View>
+        </View>
+        <Text style={styles.hint}>{hint}</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -117,6 +133,28 @@ const styles = StyleSheet.create({
   },
   fieldOpen: {
     borderColor: colors.primary,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  pill: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginRight: spacing.sm,
+  },
+  pillSelected: {
+    backgroundColor: colors.primaryLight,
+    borderColor: colors.primary,
+  },
+  pillTextSelected: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
   },
   fieldValue: {
     flex: 1,

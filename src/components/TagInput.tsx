@@ -1,14 +1,19 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { TagPills } from './TagPills';
 import { addTag, parseTagInput } from '../utils/tags';
 import { colors, radius, spacing } from '../constants/theme';
+import {
+  scrollFocusedInputIntoView,
+  useKeyboardFocusScroll,
+} from './KeyboardAwareScrollView';
 
 interface TagInputProps {
   tags: string[];
   onChange: (tags: string[]) => void;
   label?: string;
   placeholder?: string;
+  readOnly?: boolean;
 }
 
 export function TagInput({
@@ -16,8 +21,11 @@ export function TagInput({
   onChange,
   label = 'Tags',
   placeholder = 'Type a tag, press enter or comma',
+  readOnly = false,
 }: TagInputProps) {
   const [draft, setDraft] = useState('');
+  const inputRef = useRef<TextInput>(null);
+  const scrollToFocus = useKeyboardFocusScroll();
 
   const commitDraft = (raw: string) => {
     const next = addTag(tags, raw);
@@ -45,6 +53,23 @@ export function TagInput({
     if (draft.trim()) commitDraft(draft);
   };
 
+  if (readOnly) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.label}>{label}</Text>
+        {tags.length > 0 ? (
+          <View style={styles.inputWrap}>
+            <View style={styles.chips}>
+              <TagPills tags={tags} size="md" />
+            </View>
+          </View>
+        ) : (
+          <Text style={styles.empty}>No tags</Text>
+        )}
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
@@ -59,10 +84,12 @@ export function TagInput({
           </View>
         )}
         <TextInput
+          ref={inputRef}
           style={styles.input}
           value={draft}
           onChangeText={handleChangeText}
           onSubmitEditing={handleSubmit}
+          onFocus={() => scrollFocusedInputIntoView(scrollToFocus, inputRef.current)}
           placeholder={tags.length === 0 ? placeholder : 'Add another…'}
           placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
@@ -111,5 +138,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
     marginTop: spacing.xs,
+  },
+  empty: {
+    fontSize: 15,
+    color: colors.textMuted,
   },
 });

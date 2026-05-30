@@ -28,13 +28,6 @@ export function computeVisibleTo(
   }
 }
 
-export function itemNeedsVisibleToBackfill(item: Item): boolean {
-  return (
-    (item.visibility === 'private' || item.visibility === 'custom') &&
-    (!item.visibleTo || item.visibleTo.length === 0)
-  );
-}
-
 /**
  * Whether a group member can see an item.
  * Visibility = the chosen visibility setting, plus the creator and anyone assigned.
@@ -53,6 +46,14 @@ export function isItemVisibleToMember(item: Item, userId: string): boolean {
     default:
       return false;
   }
+}
+
+export function canUserEditItem(item: Item, userId: string | undefined): boolean {
+  return !!userId && item.createdBy === userId;
+}
+
+export function canUserViewItem(item: Item, userId: string | undefined): boolean {
+  return !!userId && isItemVisibleToMember(item, userId);
 }
 
 export function filterVisibleItems(items: Item[], userId: string): Item[] {

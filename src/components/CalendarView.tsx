@@ -15,6 +15,7 @@ import { formatAssigneeLabel, canUserCompleteTask } from '../utils/assignees';
 interface CalendarViewProps {
   items: Item[];
   onToggleComplete?: (instance: ItemInstance) => void;
+  onOpenItem: (instance: ItemInstance) => void;
   onEditItem: (instance: ItemInstance) => void;
   onDeleteItem: (instance: ItemInstance) => void;
   groupMembers?: User[];
@@ -45,6 +46,7 @@ function isExpiredInstance(instance: ItemInstance): boolean {
 export function CalendarView({
   items,
   onToggleComplete,
+  onOpenItem,
   onEditItem,
   onDeleteItem,
   groupMembers = [],
@@ -232,6 +234,7 @@ export function CalendarView({
                   current === instance.instanceKey ? null : instance.instanceKey
                 )
               }
+              onView={() => onOpenItem(instance)}
               onToggleComplete={
                 onToggleComplete && canUserCompleteTask(instance.item, userId)
                   ? () => onToggleComplete(instance)
