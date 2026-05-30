@@ -45,7 +45,11 @@ import { ScreenBackButton } from '../../../src/components/ScreenBackButton';
 import { ItemComments } from '../../../src/components/ItemComments';
 
 export default function ItemDetailScreen() {
-  const { id, edit } = useLocalSearchParams<{ id: string; edit?: string }>();
+  const { id, edit, commentId } = useLocalSearchParams<{
+    id: string;
+    edit?: string;
+    commentId?: string;
+  }>();
   const { user } = useAuth();
   const { items, groups } = useApp();
 
@@ -328,6 +332,7 @@ export default function ItemDetailScreen() {
         groupMembers={groupMembers}
         groupMemberIds={itemGroup?.members ?? []}
         currentUserId={user?.id}
+        focusCommentId={typeof commentId === 'string' ? commentId : undefined}
       />
     </ItemFormScreen>
   );

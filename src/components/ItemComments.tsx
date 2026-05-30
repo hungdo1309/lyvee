@@ -30,18 +30,24 @@ import {
   buildCommentThreadViews,
   createItemComment,
   deleteItemComment,
+  fetchCommentsForFocus,
   fetchItemCommentsPage,
   mergeItemCommentsIfChanged,
   subscribeToRecentItemComments,
   updateItemComment,
 } from '../services/comments';
 import { appAlert } from '../utils/dialog';
+import {
+  scrollElementIntoView,
+  useScrollIntoView,
+} from './KeyboardAwareScrollView';
 
 interface ItemCommentsProps {
   item: Item;
   groupMembers: User[];
   groupMemberIds: string[];
   currentUserId?: string;
+  focusCommentId?: string;
 }
 
 interface ComposerState {
@@ -97,7 +103,7 @@ interface CommentComposerPanelProps {
   submitting: boolean;
   inputRef: React.RefObject<TextInput | null>;
   onComposerChange: (body: string) => void;
-  onSelectionChange: (start: number) => void;
+  onSelectionChange: (start: number, end?: number) => void;
   onSelectMention: (insertToken: string) => void;
   onCancel: () => void;
   onSubmit: () => void;
@@ -139,7 +145,8 @@ function CommentComposerPanel({
           selection={pendingSelection ?? undefined}
           onChangeText={onComposerChange}
           onSelectionChange={(event) => {
-            onSelectionChange(event.nativeEvent.selection.start);
+            const { start, end } = event.nativeEvent.selection;
+            onSelectionChange(start, end);
           }}
           mentionSuggestions={mentionSuggestions}
           onSelectMention={onSelectMention}
@@ -187,6 +194,8 @@ interface CommentRowProps {
   authorInitials: string;
   currentUserId?: string;
   variant?: 'root' | 'reply';
+  highlighted?: boolean;
+  rowRef?: (node: View | null) => void;
   onReply: (comment: ItemComment) => void;
   onEdit: (comment: ItemComment) => void;
   onDelete: (comment: ItemComment) => void;
@@ -199,6 +208,8 @@ const CommentRow = React.memo(function CommentRow({
   authorInitials,
   currentUserId,
   variant = 'root',
+  highlighted = false,
+  rowRef,
   onReply,
   onEdit,
   onDelete,
@@ -208,7 +219,15 @@ const CommentRow = React.memo(function CommentRow({
   const isReply = variant === 'reply';
 
   const row = (
-    <View style={[styles.commentRow, isReply && styles.replyRow]}>
+    <View
+      ref={rowRef}
+      collapsable={false}
+      style={[
+        styles.commentRow,
+        isReply && styles.replyRow,
+        highlighted && styles.commentRowHighlighted,
+      ]}
+    >
       <View style={[styles.avatar, isReply && styles.replyAvatar]}>
         <Text style={[styles.avatarText, isReply && styles.replyAvatarText]}>
           {authorInitials}
@@ -280,7 +299,9 @@ export function ItemComments({
   groupMembers,
   groupMemberIds,
   currentUserId,
+  focusCommentId,
 }: ItemCommentsProps) {
+  const scrollIntoView = useScrollIntoView();
   const [comments, setComments] = useState<ItemComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -289,6 +310,7 @@ export function ItemComments({
   const [visibleReplyCountByRoot, setVisibleReplyCountByRoot] = useState<Record<string, number>>(
     {}
   );
+  const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [composer, setComposer] = useState<ComposerState>(EMPTY_COMPOSER);
   const [replyTo, setReplyTo] = useState<ItemComment | null>(null);
@@ -306,6 +328,8 @@ export function ItemComments({
     ReturnType<typeof fetchItemCommentsPage>
   >['lastDoc']>(null);
   const initialCommentListenerRef = useRef(true);
+  const commentRowRefs = useRef<Map<string, View>>(new Map());
+  const focusAttemptRef = useRef<string | null>(null);
 
   const membersById = useMemo(
     () => new Map(groupMembers.map((member) => [member.id, member])),
@@ -448,6 +472,85 @@ export function ItemComments({
     }));
   }, []);
 
+  const setCommentRowRef = useCallback((commentId: string, node: View | null) => {
+    if (node) {
+      commentRowRefs.current.set(commentId, node);
+      return;
+    }
+    commentRowRefs.current.delete(commentId);
+  }, []);
+
+  useEffect(() => {
+    focusAttemptRef.current = null;
+    setHighlightedCommentId(null);
+  }, [focusCommentId, item.id]);
+
+  useEffect(() => {
+    if (!focusCommentId || loading) return;
+    if (focusAttemptRef.current === focusCommentId) return;
+
+    let cancelled = false;
+
+    const revealFocusedComment = async () => {
+      let mergedComments = comments;
+      let target = mergedComments.find((comment) => comment.id === focusCommentId);
+
+      if (!target) {
+        try {
+          const fetched = await fetchCommentsForFocus(item.id, focusCommentId);
+          if (cancelled || fetched.length === 0) return;
+          mergedComments = mergeItemCommentsIfChanged(mergedComments, fetched);
+          setComments(mergedComments);
+          target = mergedComments.find((comment) => comment.id === focusCommentId);
+        } catch (error) {
+          console.warn('[ItemComments] fetchCommentsForFocus:', error);
+          return;
+        }
+      }
+
+      if (!target || cancelled) return;
+
+      const threads = buildCommentThreadViews(mergedComments);
+      const rootId = target.parentCommentId
+        ? target.threadRootId ?? getReplyThreadRootId(target)
+        : target.id;
+      const threadIndex = threads.findIndex((thread) => thread.root.id === rootId);
+
+      if (threadIndex >= 0) {
+        setVisibleThreadCount((count) => Math.max(count, threadIndex + 1));
+
+        if (target.parentCommentId) {
+          const replyIndex = threads[threadIndex].replies.findIndex(
+            (reply) => reply.id === target?.id
+          );
+          if (replyIndex >= 0) {
+            expandRepliesForThread(rootId, replyIndex + 1);
+          }
+        }
+      }
+
+      focusAttemptRef.current = focusCommentId;
+      setHighlightedCommentId(focusCommentId);
+    };
+
+    void revealFocusedComment();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [comments, expandRepliesForThread, focusCommentId, item.id, loading]);
+
+  useEffect(() => {
+    if (!highlightedCommentId) return;
+
+    const scrollTimer = setTimeout(() => {
+      const row = commentRowRefs.current.get(highlightedCommentId);
+      scrollElementIntoView(scrollIntoView, row);
+    }, 120);
+
+    return () => clearTimeout(scrollTimer);
+  }, [highlightedCommentId, scrollIntoView, visibleCommentThreads, visibleReplyCountByRoot]);
+
   const resetComposer = useCallback(() => {
     setComposer(EMPTY_COMPOSER);
     setCursor(0);
@@ -487,15 +590,24 @@ export function ItemComments({
 
   const handleComposerChange = useCallback(
     (body: string) => {
+      setPendingSelection(null);
       setComposer({ body });
       setCursor((current) => {
-        const previous = composer.body;
-        if (body.length > previous.length && current >= previous.length) {
+        const previousLength = composer.body.length;
+        const lengthDelta = body.length - previousLength;
+
+        if (lengthDelta === 1 && current >= previousLength - 1) {
+          return current + 1;
+        }
+
+        if (lengthDelta < 0 && current > body.length) {
           return body.length;
         }
-        if (body.length < previous.length && current > body.length) {
-          return body.length;
+
+        if (lengthDelta > 1 && current >= previousLength) {
+          return current + lengthDelta;
         }
+
         return current;
       });
     },
@@ -517,6 +629,9 @@ export function ItemComments({
         setPendingSelection({
           start: next.selectionStart,
           end: next.selectionStart,
+        });
+        requestAnimationFrame(() => {
+          setPendingSelection(null);
         });
         (replyTo ? replyInputRef : topInputRef).current?.focus();
         return { body: next.body };
@@ -674,9 +789,9 @@ export function ItemComments({
     resetComposer,
   ]);
 
-  const handleSelectionChange = useCallback((start: number) => {
+  const handleSelectionChange = useCallback((start: number, end: number = start) => {
     setPendingSelection(null);
-    setCursor(start);
+    setCursor(end);
   }, []);
 
   const showFeedLoader = loading && comments.length === 0;
@@ -777,6 +892,10 @@ export function ItemComments({
                     authorName={rootDisplay.authorName}
                     authorInitials={rootDisplay.authorInitials}
                     currentUserId={currentUserId}
+                    highlighted={highlightedCommentId === root.id}
+                    rowRef={(node) => {
+                      setCommentRowRef(root.id, node);
+                    }}
                     onReply={handleReply}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
@@ -793,6 +912,10 @@ export function ItemComments({
                         authorInitials={replyDisplay.authorInitials}
                         currentUserId={currentUserId}
                         variant="reply"
+                        highlighted={highlightedCommentId === reply.id}
+                        rowRef={(node) => {
+                          setCommentRowRef(reply.id, node);
+                        }}
                         onReply={handleReply}
                         onEdit={handleEdit}
                         onDelete={handleDelete}
@@ -935,6 +1058,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.sm,
     paddingVertical: 6,
+  },
+  commentRowHighlighted: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    paddingHorizontal: spacing.sm,
   },
   replyRow: {
     marginLeft: 40,

@@ -11,7 +11,8 @@ export type PushNotificationType =
   | 'item.updated'
   | 'item.deleted'
   | 'item.completed'
-  | 'item.comment.mention';
+  | 'item.comment.mention'
+  | 'item.comment.reply';
 
 export interface PushNotificationData {
   type: PushNotificationType;

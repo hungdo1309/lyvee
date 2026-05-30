@@ -23,6 +23,13 @@
         { "fieldPath": "groupId", "order": "ASCENDING" },
         { "fieldPath": "visibleTo", "arrayConfig": "CONTAINS" }
       ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

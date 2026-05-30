@@ -358,9 +358,14 @@ export function createAllUserItemsSubscription(
 ): AllUserItemsSubscription {
   const itemsByGroup = new Map<string, Item[]>();
   const listeners = new Map<string, () => void>();
+  let lastSignature = '';
 
   const emit = () => {
-    callback(sortItems(Array.from(itemsByGroup.values()).flat()));
+    const next = sortItems(Array.from(itemsByGroup.values()).flat());
+    const signature = next.map((item) => `${item.id}:${item.updatedAt ?? ''}`).join('|');
+    if (signature === lastSignature) return;
+    lastSignature = signature;
+    callback(next);
   };
 
   const removeGroupListener = (groupId: string) => {
@@ -390,10 +395,12 @@ export function createAllUserItemsSubscription(
         addGroupListener(groupId);
       }
       if (groupIds.length === 0) {
+        lastSignature = '';
         callback([]);
       }
     },
     destroy() {
+      lastSignature = '';
       for (const unsub of listeners.values()) {
         unsub();
       }

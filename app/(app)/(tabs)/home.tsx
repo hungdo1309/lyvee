@@ -15,6 +15,7 @@ import { GroupSelector } from '../../../src/components/GroupSelector';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { NoGroupsPrompt } from '../../../src/components/NoGroupsPrompt';
 import { Fab } from '../../../src/components/Fab';
+import { NotificationBell } from '../../../src/components/NotificationBell';
 import { ItemCard } from '../../../src/components/ItemCard';
 import { ItemTypeFiltersBar } from '../../../src/components/ItemTypeFiltersBar';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
@@ -302,9 +303,14 @@ export default function HomeScreen() {
         )}
       </ScrollView>
 
-      {activeGroup && (
-        <Fab onPress={handleCreateItem} accessibilityLabel="Add item" />
-      )}
+      {groups.length > 0 ? (
+        <View style={styles.fabRow}>
+          <NotificationBell embedded />
+          {activeGroup ? (
+            <Fab embedded onPress={handleCreateItem} accessibilityLabel="Add item" />
+          ) : null}
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -320,6 +326,15 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingBottom: spacing.xxl + 56,
+  },
+  fabRow: {
+    position: 'absolute',
+    right: layout.screenPadding,
+    bottom: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    zIndex: 10,
   },
   sectionHeader: {
     flexDirection: 'row',

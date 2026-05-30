@@ -2,10 +2,12 @@ import {
   collection,
   doc,
   setDoc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
   getDocs,
+  where,
   writeBatch,
   limit,
   startAfter,
@@ -18,6 +20,7 @@ import { sanitizeMentionUserIds } from '../utils/commentMentions';
 import { getUserProfile } from './auth';
 import {
   notifyCommentMentions,
+  notifyCommentReply,
   notifyNewCommentMentions,
 } from './commentNotifications';
 
@@ -189,6 +192,45 @@ export function subscribeToRecentItemComments(
   );
 }
 
+export async function fetchItemCommentById(
+  itemId: string,
+  commentId: string
+): Promise<ItemComment | null> {
+  const snapshot = await getDoc(doc(db, 'items', itemId, 'comments', commentId));
+  if (!snapshot.exists()) return null;
+  return mapComment(snapshot.id, snapshot.data() as Record<string, unknown>);
+}
+
+export async function fetchCommentsForFocus(
+  itemId: string,
+  commentId: string
+): Promise<ItemComment[]> {
+  const target = await fetchItemCommentById(itemId, commentId);
+  if (!target) return [];
+
+  const rootId = target.parentCommentId
+    ? target.threadRootId ?? target.parentCommentId
+    : target.id;
+
+  const collected = new Map<string, ItemComment>();
+  collected.set(target.id, target);
+
+  if (rootId !== target.id) {
+    const root = await fetchItemCommentById(itemId, rootId);
+    if (root) collected.set(root.id, root);
+  }
+
+  const repliesSnapshot = await getDocs(
+    query(commentsCollection(itemId), where('threadRootId', '==', rootId))
+  );
+
+  for (const docSnap of repliesSnapshot.docs) {
+    collected.set(docSnap.id, mapComment(docSnap.id, docSnap.data() as Record<string, unknown>));
+  }
+
+  return [...collected.values()];
+}
+
 export async function createItemComment(
   item: Item,
   input: ItemCommentInput,
@@ -232,6 +274,16 @@ export async function createItemComment(
     authorId,
     actor?.name ?? 'Someone'
   );
+
+  if (parentComment) {
+    await notifyCommentReply(
+      item,
+      comment,
+      parentComment,
+      authorId,
+      actor?.name ?? 'Someone'
+    );
+  }
 
   return comment;
 }

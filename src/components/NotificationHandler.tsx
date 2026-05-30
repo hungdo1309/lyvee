@@ -1,57 +1,63 @@
 import { useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
-import { router, type Href } from 'expo-router';
+import { useAuth } from '../context/AuthContext';
+import { markActivityNotificationReadFromPush } from '../services/activityNotifications';
 import { ReminderPayload } from '../services/notifications';
 import { PushNotificationData } from '../types/pushNotifications';
+import { navigateFromNotificationData } from '../utils/notificationNavigation';
 
-function navigateToItem(itemId: string, occurrence?: string) {
-  router.push({
-    pathname: '/(app)/item/[id]',
-    params: {
-      id: itemId,
-      ...(occurrence ? { occurrence } : {}),
-    },
-  });
-}
-
-function navigateToGroup(groupId: string) {
-  router.push({
-    pathname: '/(app)/(tabs)/groups/[id]',
-    params: { id: groupId },
-  } as Href);
-}
-
-function openFromPushData(data: Partial<ReminderPayload & PushNotificationData>) {
-  if (data.itemId) {
-    navigateToItem(data.itemId, data.occurrence);
-    return;
-  }
-
-  if (data.groupId && data.type?.startsWith('group.')) {
-    navigateToGroup(data.groupId);
-  }
+function isActivityPushData(
+  data: Partial<ReminderPayload & PushNotificationData>
+): data is PushNotificationData {
+  return typeof data.type === 'string' && !data.type.startsWith('reminder.');
 }
 
 export function NotificationHandler() {
+  const { user } = useAuth();
+
   useEffect(() => {
-    const openFromResponse = (
+    if (!user) return;
+
+    const openFromResponse = async (
       response: Notifications.NotificationResponse | null
     ) => {
       if (!response) return;
-      openFromPushData(
-        response.notification.request.content.data as Partial<
-          ReminderPayload & PushNotificationData
-        >
-      );
+
+      const data = response.notification.request.content.data as Partial<
+        ReminderPayload & PushNotificationData
+      >;
+
+      if (isActivityPushData(data)) {
+        try {
+          await markActivityNotificationReadFromPush(user.id, data);
+        } catch (error) {
+          console.warn('[NotificationHandler] markActivityNotificationReadFromPush:', error);
+        }
+        navigateFromNotificationData(data);
+        return;
+      }
+
+      if (data.itemId) {
+        navigateFromNotificationData({
+          type: 'item.updated',
+          itemId: data.itemId,
+          groupId: data.groupId,
+          occurrence: data.occurrence,
+        });
+      }
     };
 
-    Notifications.getLastNotificationResponseAsync().then(openFromResponse);
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      void openFromResponse(response);
+    });
 
     const subscription =
-      Notifications.addNotificationResponseReceivedListener(openFromResponse);
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        void openFromResponse(response);
+      });
 
     return () => subscription.remove();
-  }, []);
+  }, [user]);
 
   return null;
 }

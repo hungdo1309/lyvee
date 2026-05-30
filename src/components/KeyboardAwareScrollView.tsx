@@ -27,11 +27,16 @@ type KeyboardAwareScrollViewProps = ScrollViewProps & {
 type ScrollToFocusedInput = (target: NativeMethods | null | undefined) => void;
 
 const KeyboardFocusContext = createContext<ScrollToFocusedInput | null>(null);
+const ScrollIntoViewContext = createContext<ScrollToFocusedInput | null>(null);
 
 const SCROLL_GAP = spacing.lg * 2;
 
 export function useKeyboardFocusScroll(): ScrollToFocusedInput | null {
   return useContext(KeyboardFocusContext);
+}
+
+export function useScrollIntoView(): ScrollToFocusedInput | null {
+  return useContext(ScrollIntoViewContext);
 }
 
 export function scrollFocusedInputIntoView(
@@ -40,6 +45,14 @@ export function scrollFocusedInputIntoView(
 ) {
   if (!scrollToFocus || !target) return;
   scrollToFocus(target);
+}
+
+export function scrollElementIntoView(
+  scrollIntoView: ScrollToFocusedInput | null,
+  target: NativeMethods | null | undefined
+) {
+  if (!scrollIntoView || !target) return;
+  scrollIntoView(target);
 }
 
 export function KeyboardAwareScrollView({
@@ -88,6 +101,13 @@ export function KeyboardAwareScrollView({
     pendingTargetRef.current = null;
     scrollTargetIntoView(target);
   }, [scrollTargetIntoView]);
+
+  const scrollElementIntoView = useCallback(
+    (target: NativeMethods | null | undefined) => {
+      scrollTargetIntoView(target);
+    },
+    [scrollTargetIntoView]
+  );
 
   const scrollToFocusedInput = useCallback<ScrollToFocusedInput>(
     (target) => {
@@ -138,27 +158,29 @@ export function KeyboardAwareScrollView({
 
   return (
     <KeyboardFocusContext.Provider value={scrollToFocusedInput}>
-      <ScrollView
-        ref={scrollRef}
-        {...scrollViewProps}
-        style={[styles.flex, containerStyle, style]}
-        contentContainerStyle={[
-          styles.content,
-          contentContainerStyle,
-          keyboardPadding,
-        ]}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-        automaticallyAdjustKeyboardInsets={false}
-        nestedScrollEnabled
-        onScroll={(event) => {
-          scrollYRef.current = event.nativeEvent.contentOffset.y;
-          onScroll?.(event);
-        }}
-        scrollEventThrottle={16}
-      >
-        {children}
-      </ScrollView>
+      <ScrollIntoViewContext.Provider value={scrollElementIntoView}>
+        <ScrollView
+          ref={scrollRef}
+          {...scrollViewProps}
+          style={[styles.flex, containerStyle, style]}
+          contentContainerStyle={[
+            styles.content,
+            contentContainerStyle,
+            keyboardPadding,
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          automaticallyAdjustKeyboardInsets={false}
+          nestedScrollEnabled
+          onScroll={(event) => {
+            scrollYRef.current = event.nativeEvent.contentOffset.y;
+            onScroll?.(event);
+          }}
+          scrollEventThrottle={16}
+        >
+          {children}
+        </ScrollView>
+      </ScrollIntoViewContext.Provider>
     </KeyboardFocusContext.Provider>
   );
 }

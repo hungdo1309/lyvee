@@ -16,6 +16,7 @@ export default function AppLayout() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="group" />
       <Stack.Screen name="item" />
+      <Stack.Screen name="notifications" />
       <Stack.Screen name="feedback" />
       <Stack.Screen name="change-email" />
       <Stack.Screen name="change-password" />
