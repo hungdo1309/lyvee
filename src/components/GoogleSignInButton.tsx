@@ -9,11 +9,6 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import {
-  getGoogleSignInModule,
-  isGoogleSignInNativeAvailable,
-} from '../utils/googleSignInNative';
-
 interface GoogleSignInButtonProps {
   onPress: () => void;
   loading?: boolean;
@@ -34,43 +29,13 @@ export function GoogleSignInButton({
   variant = 'light',
 }: GoogleSignInButtonProps) {
   const isDisabled = disabled || loading;
-  const nativeModule = isGoogleSignInNativeAvailable()
-    ? getGoogleSignInModule()
-    : null;
-  const NativeGoogleSigninButton = nativeModule?.GoogleSigninButton;
-
-  if (NativeGoogleSigninButton) {
-    return (
-      <View style={[styles.container, style]}>
-        <NativeGoogleSigninButton
-          size={NativeGoogleSigninButton.Size.Wide}
-          color={
-            variant === 'dark'
-              ? NativeGoogleSigninButton.Color.Dark
-              : NativeGoogleSigninButton.Color.Light
-          }
-          onPress={onPress}
-          disabled={isDisabled}
-          style={styles.nativeButton}
-        />
-        {loading ? (
-          <View style={styles.loadingOverlay} pointerEvents="none">
-            <ActivityIndicator
-              color={variant === 'dark' ? '#FFFFFF' : '#1F1F1F'}
-            />
-          </View>
-        ) : null}
-      </View>
-    );
-  }
-
   const isDark = variant === 'dark';
 
   return (
     <TouchableOpacity
       style={[
-        styles.fallbackButton,
-        isDark ? styles.fallbackDark : styles.fallbackLight,
+        styles.button,
+        isDark ? styles.buttonDark : styles.buttonLight,
         isDisabled && styles.disabled,
         style,
       ]}
@@ -82,52 +47,41 @@ export function GoogleSignInButton({
       {loading ? (
         <ActivityIndicator color={isDark ? '#FFFFFF' : '#1F1F1F'} />
       ) : (
-        <>
+        <View style={styles.content}>
           <Image source={{ uri: GOOGLE_G_LOGO }} style={styles.logo} />
           <Text style={[styles.label, isDark && styles.labelDark]}>
             Sign in with Google
           </Text>
-        </>
+        </View>
       )}
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    position: 'relative',
-    width: '100%',
-  },
-  nativeButton: {
-    width: '100%',
-    height: 48,
-  },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.65)',
-    borderRadius: 4,
-  },
-  fallbackButton: {
+  button: {
     width: '100%',
     height: 48,
     borderRadius: 4,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
     paddingHorizontal: 12,
   },
-  fallbackLight: {
+  buttonLight: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#747775',
   },
-  fallbackDark: {
+  buttonDark: {
     backgroundColor: '#131314',
     borderWidth: 1,
     borderColor: '#8E918F',
+  },
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
   },
   logo: {
     width: 20,
@@ -137,6 +91,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#1F1F1F',
+    textAlign: 'center',
   },
   labelDark: {
     color: '#E3E3E3',
