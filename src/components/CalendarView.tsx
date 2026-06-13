@@ -2,20 +2,31 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Calendar, DateData } from 'react-native-calendars';
-import { addMonths, format, isBefore, parseISO, startOfDay, startOfMonth } from 'date-fns';
+import { addMonths, format, parseISO, startOfMonth } from 'date-fns';
 import { ItemInstance } from '../utils/itemInstances';
+import { Trip } from '../types/trips';
+import { TripPlanInstance } from '../utils/tripInstances';
 import { colors, layout, radius, spacing, typography } from '../constants/theme';
 import { getInstancesForDate, getMarkedDatesFromItems } from '../utils/dates';
+import {
+  getMarkedDatesFromTrips,
+  getTripPlanInstancesForDate,
+  mergeCalendarMarkedDates,
+} from '../utils/tripInstances';
 import { Item, User } from '../types';
 import { ItemCard } from './ItemCard';
+import { TripPlanItemCard } from './TripPlanItemCard';
 import { EmptyHint } from './EmptyState';
 import { MonthYearPicker } from './MonthYearPicker';
+import { CalendarDayCell } from './CalendarDayCell';
 import { formatAssigneeLabel, canUserCompleteTask } from '../utils/assignees';
 
 interface CalendarViewProps {
   items: Item[];
+  trips?: Trip[];
   onToggleComplete?: (instance: ItemInstance) => void;
   onOpenItem: (instance: ItemInstance) => void;
+  onOpenTripPlanItem?: (instance: TripPlanInstance) => void;
   onEditItem: (instance: ItemInstance) => void;
   onDeleteItem: (instance: ItemInstance) => void;
   groupMembers?: User[];
@@ -25,7 +36,6 @@ interface CalendarViewProps {
   onVisibleMonthChange?: (month: string) => void;
   selectedDate?: string;
   onSelectedDateChange?: (date: string) => void;
-  includeExpired?: boolean;
 }
 
 function sortInstancesByTime(instances: ItemInstance[]): ItemInstance[] {
@@ -37,16 +47,12 @@ function sortInstancesByTime(instances: ItemInstance[]): ItemInstance[] {
   });
 }
 
-function isExpiredInstance(instance: ItemInstance): boolean {
-  if (instance.completed) return true;
-  if (!instance.occurrenceDate) return false;
-  return isBefore(parseISO(instance.occurrenceDate), startOfDay(new Date()));
-}
-
 export function CalendarView({
   items,
+  trips = [],
   onToggleComplete,
   onOpenItem,
+  onOpenTripPlanItem,
   onEditItem,
   onDeleteItem,
   groupMembers = [],
@@ -56,7 +62,6 @@ export function CalendarView({
   onVisibleMonthChange,
   selectedDate: selectedDateProp,
   onSelectedDateChange,
-  includeExpired = false,
 }: CalendarViewProps) {
   const today = format(new Date(), 'yyyy-MM-dd');
   const [internalSelectedDate, setInternalSelectedDate] = useState(today);
@@ -77,28 +82,45 @@ export function CalendarView({
   const monthDate = useMemo(() => parseISO(visibleMonth), [visibleMonth]);
   const monthLabel = format(monthDate, 'MMMM yyyy');
 
-  const markedDates = useMemo(
-    () => getMarkedDatesFromItems(items, monthDate, { includeExpired }),
-    [items, monthDate, includeExpired]
-  );
+  const markedDates = useMemo(() => {
+    const itemMarked = getMarkedDatesFromItems(items, monthDate);
+    const tripMarked = getMarkedDatesFromTrips(trips, monthDate);
+    return mergeCalendarMarkedDates(itemMarked, tripMarked);
+  }, [items, trips, monthDate]);
 
   const dayInstances = useMemo(
     () =>
-      sortInstancesByTime(
-        getInstancesForDate(items, parseISO(selectedDate), { includeExpired })
-      ),
-    [items, selectedDate, includeExpired]
+      sortInstancesByTime(getInstancesForDate(items, parseISO(selectedDate))),
+    [items, selectedDate]
   );
 
-  const allMarked = {
-    ...markedDates,
-    [selectedDate]: {
-      ...markedDates[selectedDate],
-      marked: markedDates[selectedDate]?.marked ?? dayInstances.length > 0,
+  const dayTripInstances = useMemo(
+    () => getTripPlanInstancesForDate(trips, parseISO(selectedDate)),
+    [trips, selectedDate]
+  );
+
+  const dayEntryCount = dayInstances.length + dayTripInstances.length;
+
+  const selectedDateOverdue = markedDates[selectedDate]?.overdue ?? false;
+
+  const allMarked = useMemo(() => {
+    const merged: Record<string, Record<string, unknown>> = {};
+
+    for (const [dateKey, marking] of Object.entries(markedDates)) {
+      merged[dateKey] = { ...marking };
+    }
+
+    merged[selectedDate] = {
+      ...merged[selectedDate],
+      marked: merged[selectedDate]?.marked ?? dayEntryCount > 0,
       selected: true,
-      selectedColor: colors.primary,
-    },
-  };
+      selectedColor: selectedDateOverdue ? colors.error : colors.primary,
+      selectedTextColor: colors.onPrimary,
+      overdue: selectedDateOverdue,
+    };
+
+    return merged;
+  }, [markedDates, selectedDate, dayEntryCount, selectedDateOverdue]);
 
   const setSelectedDate = (date: string) => {
     if (onSelectedDateChange) {
@@ -132,7 +154,7 @@ export function CalendarView({
 
   useEffect(() => {
     setExpandedInstanceKey(null);
-  }, [items]);
+  }, [items, trips]);
 
   return (
     <View style={styles.container}>
@@ -174,6 +196,7 @@ export function CalendarView({
           onMonthChange={handleMonthChange}
           markedDates={allMarked}
           markingType="multi-dot"
+          dayComponent={CalendarDayCell}
           enableSwipeMonths={false}
           hideExtraDays={false}
           hideArrows
@@ -211,44 +234,54 @@ export function CalendarView({
       />
 
       <View style={styles.daySection}>
-        <Text style={styles.dayTitle}>
+        <Text style={[styles.dayTitle, selectedDateOverdue && styles.dayTitleOverdue]}>
           {format(parseISO(selectedDate), 'EEEE, MMMM d')}
         </Text>
         <Text style={styles.itemCount}>
-          {dayInstances.length} {dayInstances.length === 1 ? 'item' : 'items'}
+          {dayEntryCount} {dayEntryCount === 1 ? 'item' : 'items'}
         </Text>
       </View>
 
       <View style={styles.list}>
-        {dayInstances.length === 0 ? (
+        {dayEntryCount === 0 ? (
           <EmptyHint message="Nothing scheduled for this day" />
         ) : (
-          dayInstances.map((instance) => (
-            <ItemCard
-              key={instance.instanceKey}
-              instance={instance}
-              expanded={expandedInstanceKey === instance.instanceKey}
-              faded={isExpiredInstance(instance)}
-              onToggleExpand={() =>
-                setExpandedInstanceKey((current) =>
-                  current === instance.instanceKey ? null : instance.instanceKey
-                )
-              }
-              onView={() => onOpenItem(instance)}
-              onToggleComplete={
-                onToggleComplete && canUserCompleteTask(instance.item, userId)
-                  ? () => onToggleComplete(instance)
-                  : undefined
-              }
-              assigneeLabel={formatAssigneeLabel(instance.item.assignedTo, groupMembers)}
-              groupName={groupName}
-              isOwner={instance.item.createdBy === userId}
-              onEdit={instance.item.createdBy === userId ? () => onEditItem(instance) : undefined}
-              onDelete={
-                instance.item.createdBy === userId ? () => onDeleteItem(instance) : undefined
-              }
-            />
-          ))
+          <>
+            {dayInstances.map((instance) => (
+              <ItemCard
+                key={instance.instanceKey}
+                instance={instance}
+                expanded={expandedInstanceKey === instance.instanceKey}
+                faded={instance.completed}
+                onToggleExpand={() =>
+                  setExpandedInstanceKey((current) =>
+                    current === instance.instanceKey ? null : instance.instanceKey
+                  )
+                }
+                onView={() => onOpenItem(instance)}
+                onToggleComplete={
+                  onToggleComplete && canUserCompleteTask(instance.item, userId)
+                    ? () => onToggleComplete(instance)
+                    : undefined
+                }
+                assigneeLabel={formatAssigneeLabel(instance.item.assignedTo, groupMembers)}
+                groupName={groupName}
+                isOwner={instance.item.createdBy === userId}
+                onEdit={instance.item.createdBy === userId ? () => onEditItem(instance) : undefined}
+                onDelete={
+                  instance.item.createdBy === userId ? () => onDeleteItem(instance) : undefined
+                }
+              />
+            ))}
+            {dayTripInstances.map((instance) => (
+              <TripPlanItemCard
+                key={instance.instanceKey}
+                instance={instance}
+                groupName={groupName}
+                onPress={() => onOpenTripPlanItem?.(instance)}
+              />
+            ))}
+          </>
         )}
       </View>
     </View>
@@ -320,6 +353,9 @@ const styles = StyleSheet.create({
   dayTitle: {
     ...typography.heading,
     fontSize: 18,
+  },
+  dayTitleOverdue: {
+    color: colors.error,
   },
   itemCount: {
     ...typography.caption,

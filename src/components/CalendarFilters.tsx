@@ -164,17 +164,6 @@ export function CalendarFiltersBar({
         ))}
       </HorizontalChipRow>
 
-      <Text style={styles.label}>Status</Text>
-      <HorizontalChipRow style={styles.chipRow}>
-        <FilterChip
-          label="Includes Completed"
-          selected={filters.showExpired}
-          onPress={() => onChange({ ...filters, showExpired: !filters.showExpired })}
-          selectedColor={colors.textSecondary}
-          selectedBackground={colors.textMuted + '20'}
-        />
-      </HorizontalChipRow>
-
       {availableTags.length > 0 && (
         <TagFilterBar
           availableTags={availableTags}

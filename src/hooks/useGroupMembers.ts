@@ -5,6 +5,9 @@ import { User } from '../types';
 const membersCache = new Map<string, User[]>();
 const membersInflight = new Map<string, Promise<User[]>>();
 
+/** Stable empty array for optional member-id props. */
+export const EMPTY_MEMBER_IDS: string[] = [];
+
 function getMemberKey(memberIds: string[]): string {
   return memberIds.slice().sort().join(',');
 }
@@ -40,7 +43,7 @@ export function useGroupMembers(memberIds: string[]): {
   const memberKey = getMemberKey(memberIds);
 
   useEffect(() => {
-    if (memberIds.length === 0) {
+    if (memberKey.length === 0) {
       setMembers([]);
       setLoading(false);
       return;
@@ -69,7 +72,7 @@ export function useGroupMembers(memberIds: string[]): {
     return () => {
       cancelled = true;
     };
-  }, [memberKey, memberIds]);
+  }, [memberKey]);
 
   return { members, loading };
 }

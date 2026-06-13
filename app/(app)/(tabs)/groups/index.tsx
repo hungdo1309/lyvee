@@ -22,6 +22,7 @@ import { GroupDetailContent } from '../../../../src/components/GroupDetailConten
 import { LoadingScreen } from '../../../../src/components/LoadingScreen';
 import { KeyboardAvoidingScreen } from '../../../../src/components/KeyboardAvoidingScreen';
 import { GroupsFabMenu } from '../../../../src/components/GroupsFabMenu';
+import { MainTabScreen } from '../../../../src/components/MainTabScreen';
 import { createGroup, joinGroupByInviteCode } from '../../../../src/services/groups';
 import { getMemberRole } from '../../../../src/utils/groupRoles';
 import type { Group } from '../../../../src/types';
@@ -273,14 +274,17 @@ export default function GroupsScreen() {
 
   if (showEmptyPrompt) {
     return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        <NoGroupsPrompt />
-      </SafeAreaView>
+      <MainTabScreen title="Groups">
+        <SafeAreaView style={styles.container} edges={['bottom']}>
+          <NoGroupsPrompt />
+        </SafeAreaView>
+      </MainTabScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <MainTabScreen title="Groups">
+      <SafeAreaView style={styles.container} edges={['bottom']}>
       <KeyboardAvoidingScreen style={styles.container}>
         {showNoGroupSetup && (
           <View style={styles.setupSection}>
@@ -350,7 +354,8 @@ export default function GroupsScreen() {
           onCreate={handleFabCreate}
         />
       )}
-    </SafeAreaView>
+      </SafeAreaView>
+    </MainTabScreen>
   );
 }
 

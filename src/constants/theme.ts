@@ -24,6 +24,9 @@ export const colors = {
   task: '#F59E0B',
   activity: brand.purple,
   document: '#10B981',
+  /** US-dollar green for expense/money UI */
+  money: '#228B22',
+  moneyLight: '#E8F5E9',
   overlay: 'rgba(26, 21, 40, 0.45)',
   iconBg: brand.lavenderSoft,
   onPrimary: '#FFFFFF',
@@ -110,7 +113,9 @@ export const layout = {
   screenPadding: spacing.md,
   sectionGap: spacing.md,
   listGap: spacing.sm,
-  tabContentTopPadding: spacing.lg / 2,
+  appHeaderHeight: 48,
+  /** Space between the app header rule and screen content. */
+  tabContentTopPadding: spacing.md,
 };
 
 export const itemTypeConfig = {

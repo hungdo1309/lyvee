@@ -1,5 +1,6 @@
 import { Item } from '../types';
 import { isItemVisibleToMember } from './itemFilters';
+import { getTaskOverdueRecipients } from './pushRecipients';
 
 /**
  * Whether a user should receive local reminders for an item.
@@ -22,4 +23,14 @@ export function getItemsForNotification(
   userId: string
 ): Item[] {
   return items.filter((item) => shouldNotifyUser(item, userId));
+}
+
+export function shouldReceiveTaskOverdueNotification(item: Item, userId: string): boolean {
+  if (item.type !== 'task' || !item.dateTime) return false;
+  if (!isItemVisibleToMember(item, userId)) return false;
+  return getTaskOverdueRecipients(item).includes(userId);
+}
+
+export function getItemsForOverdueNotification(items: Item[], userId: string): Item[] {
+  return items.filter((item) => shouldReceiveTaskOverdueNotification(item, userId));
 }

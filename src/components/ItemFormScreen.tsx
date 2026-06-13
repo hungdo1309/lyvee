@@ -1,9 +1,10 @@
 import React from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { NestableScrollContainer } from 'react-native-draggable-flatlist';
 import { KeyboardAwareScrollView } from './KeyboardAwareScrollView';
 import { HeaderCancelButton } from './HeaderCancelButton';
-import { colors } from '../constants/theme';
+import { colors, spacing } from '../constants/theme';
 import {
   getFormTopBarHeight,
   getItemFormContentPadding,
@@ -17,6 +18,8 @@ interface ItemFormScreenProps {
   leftAction?: React.ReactNode;
   rightAction?: React.ReactNode;
   children: React.ReactNode;
+  /** Enables nested drag-to-reorder lists inside the screen scroll view. */
+  nestableScroll?: boolean;
 }
 
 export function ItemFormScreen({
@@ -24,9 +27,11 @@ export function ItemFormScreen({
   leftAction,
   rightAction,
   children,
+  nestableScroll = false,
 }: ItemFormScreenProps) {
   const insets = useSafeAreaInsets();
   const iosScrollProps = getIosScrollInsetProps();
+  const contentContainerStyle = [styles.content, getItemFormContentPadding(insets)];
 
   return (
     <View style={styles.screen}>
@@ -40,28 +45,42 @@ export function ItemFormScreen({
         ]}
       >
         <View style={[styles.topBar, { height: getFormTopBarHeight() }]}>
-          <View style={styles.side}>
+          <View style={[styles.side, styles.sideLeft]}>
             {leftAction ?? <HeaderCancelButton />}
           </View>
-          <View style={styles.titleWrap} pointerEvents="none">
-            <Text style={styles.title} numberOfLines={1}>
-              {title}
-            </Text>
-          </View>
+          {title ? (
+            <View style={styles.titleWrap}>
+              <Text style={styles.title} numberOfLines={1}>
+                {title}
+              </Text>
+            </View>
+          ) : null}
           <View style={[styles.side, styles.sideRight]}>{rightAction}</View>
         </View>
 
-        <KeyboardAwareScrollView
-          style={styles.flex}
-          keyboardVerticalOffset={
-            Platform.OS === 'ios' ? getItemFormTopBarHeight(insets) : 0
-          }
-          {...iosScrollProps}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[styles.content, getItemFormContentPadding(insets)]}
-        >
-          {children}
-        </KeyboardAwareScrollView>
+        {nestableScroll ? (
+          <NestableScrollContainer
+            style={styles.flex}
+            {...iosScrollProps}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={contentContainerStyle}
+          >
+            {children}
+          </NestableScrollContainer>
+        ) : (
+          <KeyboardAwareScrollView
+            style={styles.flex}
+            keyboardVerticalOffset={
+              Platform.OS === 'ios' ? getItemFormTopBarHeight(insets) : 0
+            }
+            {...iosScrollProps}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={contentContainerStyle}
+          >
+            {children}
+          </KeyboardAwareScrollView>
+        )}
       </View>
     </View>
   );
@@ -84,21 +103,29 @@ const styles = StyleSheet.create({
     marginBottom: itemFormLayout.verticalPadding,
   },
   side: {
+    flex: 1,
+    minWidth: 0,
     zIndex: 1,
+  },
+  sideLeft: {
+    alignItems: 'flex-start',
   },
   sideRight: {
     alignItems: 'flex-end',
   },
   titleWrap: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
+    flex: 1.2,
+    minWidth: 0,
     alignItems: 'center',
-    paddingHorizontal: 96,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
   },
   title: {
     fontSize: 17,
     fontWeight: '600',
     color: colors.text,
+    width: '100%',
+    textAlign: 'center',
   },
   flex: {
     flex: 1,

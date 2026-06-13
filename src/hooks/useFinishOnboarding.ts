@@ -7,7 +7,7 @@ import { appAlert } from '../utils/dialog';
 
 export function useFinishOnboarding() {
   const { user } = useAuth();
-  const { items, selectGroup, completeOnboarding } = useApp();
+  const { items, trips, groups, selectGroup, completeOnboarding } = useApp();
   const [finishing, setFinishing] = useState(false);
 
   const finish = useCallback(
@@ -16,7 +16,7 @@ export function useFinishOnboarding() {
       setFinishing(true);
       try {
         if (user) {
-          await enableNotificationsForUser(user.id, items);
+          await enableNotificationsForUser(user.id, items, trips, groups);
         }
 
         if (groupId) {
@@ -32,7 +32,7 @@ export function useFinishOnboarding() {
         setFinishing(false);
       }
     },
-    [completeOnboarding, finishing, items, selectGroup, user]
+    [completeOnboarding, finishing, groups, items, selectGroup, trips, user]
   );
 
   return { finish, finishing };

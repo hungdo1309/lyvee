@@ -3,37 +3,68 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { addDays, isBefore, parseISO } from 'date-fns';
-import { Item, ItemReminderOffset, getReminderOptionLabel } from '../types';
+import { Group, Item, ItemReminderOffset, getReminderOptionLabel } from '../types';
+import { Trip, TripItineraryEntry } from '../types/trips';
 import { APP_NAME } from '../constants/app';
-import { expandItem } from '../utils/itemInstances';
-import { getItemsForNotification } from '../utils/notificationRules';
+import { expandItem, isOverdueCalendarInstance } from '../utils/itemInstances';
+import {
+  getItemsForNotification,
+  getItemsForOverdueNotification,
+} from '../utils/notificationRules';
 import { formatRecurringLabel } from '../utils/recurrence';
 import {
   getReminderOffsetsForItem,
   reminderOffsetToMs,
 } from '../utils/reminders';
+import { isAutoFlightEntryId, parseAutoFlightEntryId } from '../utils/tripFlightEntries';
+import { getTripsForNotification } from '../utils/tripNotificationRules';
+import { buildTripEntryDateTime } from '../utils/tripInstances';
 
 export { formatRecurringLabel } from '../utils/recurrence';
 
 /** iOS caps local notifications; schedule the nearest reminders first. */
 const MAX_SCHEDULED_NOTIFICATIONS = 58;
 const SCHEDULE_HORIZON_DAYS = 90;
+const OVERDUE_PUSH_LOOKBACK_DAYS = 30;
 let lastReminderSyncKey = '';
 let lastReminderSyncUserId = '';
 
+export type TripReminderKind = 'flight_checkin' | 'flight_airport' | 'plan_start';
+
 export interface ReminderPayload {
-  itemId: string;
+  itemId?: string;
   groupId: string;
-  occurrence: string;
-  reminder: ItemReminderOffset;
+  occurrence?: string;
+  reminder?: ItemReminderOffset;
+  tripId?: string;
+  entryId?: string;
+  dateKey?: string;
+  tripReminder?: TripReminderKind;
 }
 
-interface PendingReminder {
+interface PendingItemReminder {
+  kind: 'item';
   item: Item;
   occurrenceDate: string;
   triggerDate: Date;
   reminder: ItemReminderOffset;
+  isOverdue?: boolean;
 }
+
+interface PendingTripReminder {
+  kind: 'trip';
+  trip: Trip;
+  entry: TripItineraryEntry;
+  dateKey: string;
+  triggerDate: Date;
+  tripReminder: TripReminderKind;
+}
+
+type PendingReminder = PendingItemReminder | PendingTripReminder;
+
+const FLIGHT_CHECKIN_MS = 24 * 60 * 60 * 1000;
+const FLIGHT_AIRPORT_MS = 3 * 60 * 60 * 1000;
+const PLAN_START_MS = 30 * 60 * 1000;
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -135,7 +166,9 @@ export async function registerForPushNotifications(): Promise<string | null> {
 /** Prompts for OS notification permission, then registers push + local reminders. */
 export async function enableNotificationsForUser(
   userId: string,
-  items: Item[] = []
+  items: Item[] = [],
+  trips: Trip[] = [],
+  groups: Group[] = []
 ): Promise<boolean> {
   const granted = await requestNotificationPermissions();
   if (!granted) return false;
@@ -146,9 +179,9 @@ export async function enableNotificationsForUser(
     await registerPushToken(userId, token);
   }
 
-  if (items.length > 0) {
+  if (items.length > 0 || trips.length > 0) {
     lastReminderSyncKey = '';
-    await syncItemNotifications(items, userId);
+    await syncScheduleNotifications(items, trips, groups, userId);
   }
 
   return true;
@@ -195,12 +228,12 @@ function triggerDateForOffset(
   return new Date(occurrence.getTime() - ms);
 }
 
-function buildRemindersForItem(item: Item, now: Date): PendingReminder[] {
+function buildRemindersForItem(item: Item, now: Date): PendingItemReminder[] {
   if (!item.dateTime) return [];
 
   const rangeEnd = addDays(now, SCHEDULE_HORIZON_DAYS);
   const instances = expandItem(item, now, rangeEnd);
-  const reminders: PendingReminder[] = [];
+  const reminders: PendingItemReminder[] = [];
   const offsets = getReminderOffsetsForItem(item);
 
   for (const instance of instances) {
@@ -213,6 +246,7 @@ function buildRemindersForItem(item: Item, now: Date): PendingReminder[] {
       if (!triggerDate || isBefore(triggerDate, now)) continue;
 
       reminders.push({
+        kind: 'item',
         item,
         occurrenceDate: instance.occurrenceDate,
         triggerDate,
@@ -224,8 +258,171 @@ function buildRemindersForItem(item: Item, now: Date): PendingReminder[] {
   return reminders;
 }
 
+function getTripReminderCopy(
+  trip: Trip,
+  entry: TripItineraryEntry,
+  tripReminder: TripReminderKind
+): { title: string; body: string } {
+  if (tripReminder === 'flight_checkin') {
+    return {
+      title: 'Time to check in for your flight',
+      body: `${entry.title} · ${trip.destination}`,
+    };
+  }
+
+  if (tripReminder === 'flight_airport') {
+    return {
+      title: 'Head to the airport soon',
+      body: `${entry.title} · ${trip.destination}`,
+    };
+  }
+
+  return {
+    title: `${entry.title} starting in 30 mins`,
+    body: trip.destination,
+  };
+}
+
+function buildRemindersForTrip(trip: Trip, now: Date): PendingTripReminder[] {
+  const rangeEnd = addDays(now, SCHEDULE_HORIZON_DAYS);
+  const reminders: PendingTripReminder[] = [];
+
+  for (const day of trip.days) {
+    for (const entry of day.entries) {
+      if (!entry.startTime) continue;
+
+      const eventDate = buildTripEntryDateTime(day.date, entry.startTime);
+      if (isBefore(eventDate, now) || eventDate > rangeEnd) continue;
+
+      if (isAutoFlightEntryId(entry.id)) {
+        const flightKind = parseAutoFlightEntryId(entry.id)?.kind;
+        const checkinTrigger = new Date(eventDate.getTime() - FLIGHT_CHECKIN_MS);
+        const airportTrigger = new Date(eventDate.getTime() - FLIGHT_AIRPORT_MS);
+
+        if (flightKind === 'depart' && !isBefore(checkinTrigger, now)) {
+          reminders.push({
+            kind: 'trip',
+            trip,
+            entry,
+            dateKey: day.date,
+            triggerDate: checkinTrigger,
+            tripReminder: 'flight_checkin',
+          });
+        }
+
+        if (flightKind === 'depart' && !isBefore(airportTrigger, now)) {
+          reminders.push({
+            kind: 'trip',
+            trip,
+            entry,
+            dateKey: day.date,
+            triggerDate: airportTrigger,
+            tripReminder: 'flight_airport',
+          });
+        }
+        continue;
+      }
+
+      const planTrigger = new Date(eventDate.getTime() - PLAN_START_MS);
+      if (isBefore(planTrigger, now)) continue;
+
+      reminders.push({
+        kind: 'trip',
+        trip,
+        entry,
+        dateKey: day.date,
+        triggerDate: planTrigger,
+        tripReminder: 'plan_start',
+      });
+    }
+  }
+
+  return reminders;
+}
+
+function buildOverdueRemindersForItem(item: Item, now: Date): PendingItemReminder[] {
+  if (item.type !== 'task' || !item.dateTime) return [];
+
+  const rangeEnd = addDays(now, SCHEDULE_HORIZON_DAYS);
+  const instances = expandItem(item, now, rangeEnd);
+  const reminders: PendingItemReminder[] = [];
+
+  for (const instance of instances) {
+    if (instance.completed) continue;
+
+    const occurrence = parseISO(instance.occurrenceDate);
+    if (isBefore(occurrence, now)) continue;
+
+    reminders.push({
+      kind: 'item',
+      item,
+      occurrenceDate: instance.occurrenceDate,
+      triggerDate: occurrence,
+      reminder: 'at_time',
+      isOverdue: true,
+    });
+  }
+
+  return reminders;
+}
+
+async function processOverdueTaskNotifications(
+  items: Item[],
+  actorUserId: string
+): Promise<void> {
+  const now = new Date();
+  const rangeStart = addDays(now, -OVERDUE_PUSH_LOOKBACK_DAYS);
+  const { tryClaimOverdueNotificationLock } = await import('./overdueNotificationLocks');
+  const { notifyTaskOverdue } = await import('./itemNotifications');
+
+  for (const item of items) {
+    if (item.type !== 'task' || !item.dateTime) continue;
+
+    const instances = expandItem(item, rangeStart, now);
+    for (const instance of instances) {
+      if (!isOverdueCalendarInstance(instance)) continue;
+
+      const claimed = await tryClaimOverdueNotificationLock(
+        item.id,
+        instance.occurrenceDate,
+        item.groupId,
+        actorUserId
+      );
+      if (!claimed) continue;
+
+      await notifyTaskOverdue(item, instance.occurrenceDate, actorUserId);
+    }
+  }
+}
+
 async function scheduleReminder(pending: PendingReminder): Promise<void> {
-  const { item, occurrenceDate, triggerDate, reminder } = pending;
+  if (pending.kind === 'trip') {
+    const { trip, entry, dateKey, triggerDate, tripReminder } = pending;
+    const copy = getTripReminderCopy(trip, entry, tripReminder);
+    const data: ReminderPayload = {
+      groupId: trip.groupId,
+      tripId: trip.id,
+      entryId: entry.id,
+      dateKey,
+      tripReminder,
+    };
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: copy.title,
+        body: copy.body,
+        data: data as unknown as Record<string, unknown>,
+        ...(Platform.OS === 'android' ? { channelId: 'reminders' } : {}),
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: triggerDate,
+      },
+    });
+    return;
+  }
+
+  const { item, occurrenceDate, triggerDate, reminder, isOverdue } = pending;
   const data: ReminderPayload = {
     itemId: item.id,
     groupId: item.groupId,
@@ -233,10 +430,17 @@ async function scheduleReminder(pending: PendingReminder): Promise<void> {
     reminder,
   };
 
+  const title = isOverdue
+    ? `Task overdue: ${item.title}`
+    : getReminderTitle(item, reminder);
+  const body = isOverdue
+    ? 'This task is now overdue'
+    : getReminderBody(item, reminder);
+
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: getReminderTitle(item, reminder),
-      body: getReminderBody(item, reminder),
+      title,
+      body,
       data: data as unknown as Record<string, unknown>,
       ...(Platform.OS === 'android' ? { channelId: 'reminders' } : {}),
     },
@@ -247,12 +451,25 @@ async function scheduleReminder(pending: PendingReminder): Promise<void> {
   });
 }
 
+function buildReminderSyncKey(reminders: PendingReminder[]): string {
+  return reminders
+    .map((reminder) => {
+      if (reminder.kind === 'trip') {
+        return `trip:${reminder.trip.id}:${reminder.entry.id}:${reminder.dateKey}:${reminder.tripReminder}:${reminder.triggerDate.toISOString()}`;
+      }
+      return `item:${reminder.item.id}:${reminder.occurrenceDate}:${reminder.isOverdue ? 'overdue' : reminder.reminder}:${reminder.triggerDate.toISOString()}`;
+    })
+    .join('|');
+}
+
 /**
  * Schedules local reminders for upcoming item occurrences visible/assigned to the user.
  * Uses each item's reminder setting (legacy items without one keep 24h + 1h).
  */
-export async function syncItemNotifications(
+export async function syncScheduleNotifications(
   items: Item[],
+  trips: Trip[],
+  groups: Group[],
   userId: string
 ): Promise<void> {
   const hasPermission = await hasNotificationPermissions();
@@ -266,18 +483,20 @@ export async function syncItemNotifications(
   try {
     const now = new Date();
     const eligible = getItemsForNotification(items, userId);
+    const overdueEligible = getItemsForOverdueNotification(items, userId);
+    const eligibleTrips = getTripsForNotification(trips, groups, userId);
 
-    const allReminders = eligible
-      .flatMap((item) => buildRemindersForItem(item, now))
+    const allReminders = [
+      ...eligible.flatMap((item) => buildRemindersForItem(item, now)),
+      ...overdueEligible.flatMap((item) => buildOverdueRemindersForItem(item, now)),
+      ...eligibleTrips.flatMap((trip) => buildRemindersForTrip(trip, now)),
+    ]
       .sort((a, b) => a.triggerDate.getTime() - b.triggerDate.getTime())
       .slice(0, MAX_SCHEDULED_NOTIFICATIONS);
 
-    const syncKey = allReminders
-      .map(
-        (reminder) =>
-          `${reminder.item.id}:${reminder.occurrenceDate}:${reminder.reminder}:${reminder.triggerDate.toISOString()}`
-      )
-      .join('|');
+    await processOverdueTaskNotifications(items, userId);
+
+    const syncKey = buildReminderSyncKey(allReminders);
 
     if (syncKey === lastReminderSyncKey) {
       return;
@@ -292,6 +511,14 @@ export async function syncItemNotifications(
   } catch {
     // Local scheduling may be limited in Expo Go.
   }
+}
+
+/** @deprecated use syncScheduleNotifications */
+export async function syncItemNotifications(
+  items: Item[],
+  userId: string
+): Promise<void> {
+  await syncScheduleNotifications(items, [], [], userId);
 }
 
 export async function getScheduledReminderCount(): Promise<number> {

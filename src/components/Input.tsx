@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   TextInput,
@@ -27,11 +27,22 @@ export const Input = React.forwardRef<TextInput, InputProps>(function Input(
   const [focused, setFocused] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
+  const measureRef = useRef<View>(null);
   const scrollToFocus = useKeyboardFocusScroll();
   const isPasswordField = secureTextEntry === true;
   const isReadOnly = editable === false;
 
-  React.useImperativeHandle(ref, () => inputRef.current as TextInput);
+  const assignInputRef = useCallback(
+    (node: TextInput | null) => {
+      inputRef.current = node;
+      if (typeof ref === 'function') {
+        ref(node);
+      } else if (ref) {
+        ref.current = node;
+      }
+    },
+    [ref]
+  );
 
   const handleBlur = (event: Parameters<NonNullable<TextInputProps['onBlur']>>[0]) => {
     setFocused(false);
@@ -42,9 +53,9 @@ export const Input = React.forwardRef<TextInput, InputProps>(function Input(
   return (
     <View style={styles.container}>
       {label && <Text style={styles.label}>{label}</Text>}
-      <View style={styles.inputWrapper}>
+      <View ref={measureRef} collapsable={false} style={styles.inputWrapper}>
         <TextInput
-          ref={inputRef}
+          ref={assignInputRef}
           placeholderTextColor={colors.textMuted}
           {...props}
           editable={editable}
@@ -62,7 +73,7 @@ export const Input = React.forwardRef<TextInput, InputProps>(function Input(
             setFocused(true);
             onFocus?.(event);
             if (!isReadOnly) {
-              scrollFocusedInputIntoView(scrollToFocus, inputRef.current);
+              scrollFocusedInputIntoView(scrollToFocus, measureRef.current);
             }
           }}
           onBlur={handleBlur}

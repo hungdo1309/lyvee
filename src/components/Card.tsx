@@ -15,20 +15,26 @@ interface CardProps {
   children: React.ReactNode;
   variant?: CardVariant;
   onPress?: () => void;
+  onLongPress?: () => void;
+  delayLongPress?: number;
   style?: StyleProp<ViewStyle>;
   padded?: boolean;
   accessibilityRole?: TouchableOpacityProps['accessibilityRole'];
   accessibilityState?: TouchableOpacityProps['accessibilityState'];
+  accessibilityLabel?: string;
 }
 
 export function Card({
   children,
   variant = 'default',
   onPress,
+  onLongPress,
+  delayLongPress,
   style,
   padded = true,
   accessibilityRole,
   accessibilityState,
+  accessibilityLabel,
 }: CardProps) {
   const content = (
     <View
@@ -45,13 +51,16 @@ export function Card({
     </View>
   );
 
-  if (onPress) {
+  if (onPress || onLongPress) {
     return (
       <TouchableOpacity
         onPress={onPress}
+        onLongPress={onLongPress}
+        delayLongPress={delayLongPress}
         activeOpacity={0.72}
         accessibilityRole={accessibilityRole}
         accessibilityState={accessibilityState}
+        accessibilityLabel={accessibilityLabel}
       >
         {content}
       </TouchableOpacity>

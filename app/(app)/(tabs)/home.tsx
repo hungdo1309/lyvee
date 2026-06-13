@@ -15,15 +15,20 @@ import { GroupSelector } from '../../../src/components/GroupSelector';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { NoGroupsPrompt } from '../../../src/components/NoGroupsPrompt';
 import { Fab } from '../../../src/components/Fab';
-import { NotificationBell } from '../../../src/components/NotificationBell';
+import { MainTabScreen } from '../../../src/components/MainTabScreen';
 import { ItemCard } from '../../../src/components/ItemCard';
+import { TripPlanItemCard } from '../../../src/components/TripPlanItemCard';
 import { ItemTypeFiltersBar } from '../../../src/components/ItemTypeFiltersBar';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
 import { useGroupMembers } from '../../../src/hooks/useGroupMembers';
+import { useGroupExpenseSettleData } from '../../../src/hooks/useGroupExpenseSettleData';
+import { HomeUnsettledExpensesSection } from '../../../src/components/HomeUnsettledExpensesSection';
 import { toggleItemComplete, deleteItem } from '../../../src/services/items';
+import { canManageGroup } from '../../../src/utils/groupRoles';
+import { buildHomeSettleExpenseEntries } from '../../../src/utils/homeSettleExpenses';
 import { collectTagsFromItems } from '../../../src/utils/tags';
 import { formatAssigneeLabel, canUserCompleteTask } from '../../../src/utils/assignees';
-import { formatUpcomingDayHeader } from '../../../src/utils/dates';
+import { formatOverdueSectionHeader, formatUpcomingDayHeader } from '../../../src/utils/dates';
 import {
   filterItemsByTypeAndTags,
   hasActiveItemTypeTagFilters,
@@ -31,20 +36,29 @@ import {
 } from '../../../src/utils/itemFilters';
 import {
   ItemInstance,
-  buildHomeUpcomingDaySections,
+  getOverdueTaskInstances,
   getUpcomingWindowInstances,
+  hasOverdueInstances,
   HOME_UPCOMING_DAYS,
-  isCalendarInstanceActive,
+  sortItemListInstances,
 } from '../../../src/utils/itemInstances';
+import {
+  buildHomeUpcomingDaySchedule,
+  countHomeScheduleEntries,
+  getUpcomingTripPlanInstances,
+  TripPlanInstance,
+} from '../../../src/utils/tripInstances';
 import { colors, layout, radius, spacing, typography } from '../../../src/constants/theme';
 
 export default function HomeScreen() {
   const { user } = useAuth();
-  const { groups, activeGroup, selectGroup, loading, getGroupItems } = useApp();
+  const { groups, activeGroup, selectGroup, loading, getGroupItems, getGroupTrips, getGroupExpenseGroups } =
+    useApp();
   const [typeFilter, setTypeFilter] = useState<ItemTypeFilter>('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [expandedDays, setExpandedDays] = useState<Record<string, true>>({});
+  const [overdueExpanded, setOverdueExpanded] = useState(false);
   const [expandedInstanceKey, setExpandedInstanceKey] = useState<string | null>(null);
 
   const { members: groupMembers } = useGroupMembers(activeGroup?.members ?? []);
@@ -54,10 +68,47 @@ export default function HomeScreen() {
     setSelectedTags([]);
     setShowFilters(false);
     setExpandedDays({});
+    setOverdueExpanded(false);
     setExpandedInstanceKey(null);
   }, [activeGroup?.id]);
 
   const groupItems = activeGroup ? getGroupItems(activeGroup.id) : [];
+  const groupTrips = activeGroup ? getGroupTrips(activeGroup.id) : [];
+  const groupExpenseGroups = activeGroup ? getGroupExpenseGroups(activeGroup.id) : [];
+
+  const { visibleExpenseGroups, expensesByGroupId, settlementsByGroupId, loading: expenseSettleLoading, refreshExpenseSettleData } =
+    useGroupExpenseSettleData(activeGroup, user?.id, groupExpenseGroups, groupTrips);
+
+  const isGroupManager = Boolean(
+    activeGroup && user && canManageGroup(activeGroup, user.id)
+  );
+
+  const memberNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const member of groupMembers) {
+      map.set(member.id, member.name);
+    }
+    return map;
+  }, [groupMembers]);
+
+  const unsettledExpenseEntries = useMemo(() => {
+    if (!activeGroup || !user) return [];
+    return buildHomeSettleExpenseEntries(
+      activeGroup,
+      user.id,
+      visibleExpenseGroups,
+      expensesByGroupId,
+      settlementsByGroupId,
+      groupTrips
+    );
+  }, [
+    activeGroup,
+    user,
+    visibleExpenseGroups,
+    expensesByGroupId,
+    settlementsByGroupId,
+    groupTrips,
+  ]);
 
   const availableTags = useMemo(
     () => collectTagsFromItems(groupItems),
@@ -78,12 +129,23 @@ export default function HomeScreen() {
     [typeFilter, selectedTags]
   );
 
+  const overdueInstances = useMemo(
+    () => getOverdueTaskInstances(filteredItems),
+    [filteredItems]
+  );
+
   const daySections = useMemo(() => {
     const instances = getUpcomingWindowInstances(filteredItems, HOME_UPCOMING_DAYS, {
       includeExpired: true,
     });
-    return buildHomeUpcomingDaySections(instances);
-  }, [filteredItems]);
+    const tripInstances = getUpcomingTripPlanInstances(groupTrips, HOME_UPCOMING_DAYS);
+    return buildHomeUpcomingDaySchedule(instances, tripInstances, HOME_UPCOMING_DAYS).map(
+      (section) => ({
+        ...section,
+        instances: sortItemListInstances(section.itemInstances),
+      })
+    );
+  }, [filteredItems, groupTrips]);
 
   const handleToggleComplete = async (instance: ItemInstance) => {
     if (instance.item.type !== 'task') return;
@@ -127,6 +189,17 @@ export default function HomeScreen() {
     );
   };
 
+  const handleOpenTripPlanItem = (instance: TripPlanInstance) => {
+    router.push({
+      pathname: '/(app)/trip/[id]',
+      params: {
+        id: instance.tripId,
+        date: instance.dateKey,
+        entryId: instance.entry.id,
+      },
+    });
+  };
+
   const handleGroupChange = async (groupId: string) => {
     await selectGroup(groupId);
     setExpandedInstanceKey(null);
@@ -150,20 +223,53 @@ export default function HomeScreen() {
     });
   };
 
+  const renderItemInstance = (instance: ItemInstance) => (
+    <View key={instance.instanceKey} style={styles.itemRow}>
+      <ItemCard
+        instance={instance}
+        expanded={expandedInstanceKey === instance.instanceKey}
+        onToggleExpand={() =>
+          setExpandedInstanceKey((current) =>
+            current === instance.instanceKey ? null : instance.instanceKey
+          )
+        }
+        onView={() => handleOpenItem(instance)}
+        onToggleComplete={
+          canUserCompleteTask(instance.item, user?.id)
+            ? () => handleToggleComplete(instance)
+            : undefined
+        }
+        faded={instance.completed}
+        assigneeLabel={formatAssigneeLabel(instance.item.assignedTo, groupMembers)}
+        groupName={activeGroup?.name}
+        isOwner={instance.item.createdBy === user?.id}
+        onEdit={
+          instance.item.createdBy === user?.id ? () => handleEditItem(instance) : undefined
+        }
+        onDelete={
+          instance.item.createdBy === user?.id ? () => handleDeleteItem(instance) : undefined
+        }
+      />
+    </View>
+  );
+
   if (loading) {
     return <LoadingScreen />;
   }
 
   if (groups.length === 0) {
     return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        <NoGroupsPrompt />
-      </SafeAreaView>
+      <MainTabScreen title="Home">
+        <SafeAreaView style={styles.container} edges={['bottom']}>
+          <NoGroupsPrompt />
+        </SafeAreaView>
+      </MainTabScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <MainTabScreen title="Home">
+      <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -178,7 +284,55 @@ export default function HomeScreen() {
 
         {activeGroup && (
           <>
-            <View style={styles.sectionHeader}>
+            {overdueInstances.length > 0 ? (
+              <>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionHeading}>Overdue</Text>
+                </View>
+                <View style={styles.dayList}>
+                  <View style={[styles.daySection, styles.daySectionOverdue]}>
+                    <TouchableOpacity
+                      style={styles.dayHeader}
+                      onPress={() => setOverdueExpanded((value) => !value)}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded: overdueExpanded }}
+                    >
+                      <Text style={[styles.dayHeaderText, styles.dayHeaderTextOverdue]}>
+                        {formatOverdueSectionHeader(overdueInstances.length)}
+                      </Text>
+                      <Ionicons
+                        name={overdueExpanded ? 'chevron-up' : 'chevron-down'}
+                        size={18}
+                        color={colors.error}
+                      />
+                    </TouchableOpacity>
+
+                    {overdueExpanded
+                      ? overdueInstances.map((instance) => renderItemInstance(instance))
+                      : null}
+                  </View>
+                </View>
+              </>
+            ) : null}
+
+            {user && !expenseSettleLoading && unsettledExpenseEntries.length > 0 ? (
+              <HomeUnsettledExpensesSection
+                entries={unsettledExpenseEntries}
+                memberNameById={memberNameById}
+                viewerUserId={user.id}
+                isManager={isGroupManager}
+                onSettled={refreshExpenseSettleData}
+              />
+            ) : null}
+
+            <View
+              style={[
+                styles.sectionHeader,
+                (overdueInstances.length > 0 || unsettledExpenseEntries.length > 0) &&
+                  styles.sectionHeaderSpaced,
+              ]}
+            >
               <Text style={styles.sectionHeading}>Upcoming in the next two weeks</Text>
               <TouchableOpacity
                 style={[
@@ -211,8 +365,9 @@ export default function HomeScreen() {
             <View style={styles.dayList}>
               {daySections.map((section) => {
                 const expanded = !!expandedDays[section.dateKey];
-                const count = section.instances.length;
+                const count = countHomeScheduleEntries(section);
                 const hasItems = count > 0;
+                const sectionOverdue = hasOverdueInstances(section.instances);
 
                 return (
                   <View
@@ -233,7 +388,9 @@ export default function HomeScreen() {
                         style={[
                           styles.dayHeaderText,
                           hasItems
-                            ? styles.dayHeaderTextHasItems
+                            ? sectionOverdue
+                              ? styles.dayHeaderTextOverdue
+                              : styles.dayHeaderTextHasItems
                             : styles.dayHeaderTextEmpty,
                         ]}
                       >
@@ -242,7 +399,13 @@ export default function HomeScreen() {
                       <Ionicons
                         name={expanded ? 'chevron-up' : 'chevron-down'}
                         size={18}
-                        color={hasItems ? colors.primary : colors.textSecondary}
+                        color={
+                          hasItems
+                            ? sectionOverdue
+                              ? colors.error
+                              : colors.primary
+                            : colors.textSecondary
+                        }
                       />
                     </TouchableOpacity>
 
@@ -250,44 +413,18 @@ export default function HomeScreen() {
                       (count === 0 ? (
                         <Text style={styles.emptyDay}>Nothing scheduled for this day</Text>
                       ) : (
-                        section.instances.map((instance) => (
-                          <View key={instance.instanceKey} style={styles.itemRow}>
-                            <ItemCard
-                              instance={instance}
-                              expanded={expandedInstanceKey === instance.instanceKey}
-                              onToggleExpand={() =>
-                                setExpandedInstanceKey((current) =>
-                                  current === instance.instanceKey
-                                    ? null
-                                    : instance.instanceKey
-                                )
-                              }
-                              onView={() => handleOpenItem(instance)}
-                              onToggleComplete={
-                                canUserCompleteTask(instance.item, user?.id)
-                                  ? () => handleToggleComplete(instance)
-                                  : undefined
-                              }
-                              faded={!isCalendarInstanceActive(instance)}
-                              assigneeLabel={formatAssigneeLabel(
-                                instance.item.assignedTo,
-                                groupMembers
-                              )}
-                              groupName={activeGroup.name}
-                              isOwner={instance.item.createdBy === user?.id}
-                              onEdit={
-                                instance.item.createdBy === user?.id
-                                  ? () => handleEditItem(instance)
-                                  : undefined
-                              }
-                              onDelete={
-                                instance.item.createdBy === user?.id
-                                  ? () => handleDeleteItem(instance)
-                                  : undefined
-                              }
-                            />
-                          </View>
-                        ))
+                        <>
+                          {section.instances.map((instance) => renderItemInstance(instance))}
+                          {section.tripInstances.map((instance) => (
+                            <View key={instance.instanceKey} style={styles.itemRow}>
+                              <TripPlanItemCard
+                                instance={instance}
+                                groupName={activeGroup.name}
+                                onPress={() => handleOpenTripPlanItem(instance)}
+                              />
+                            </View>
+                          ))}
+                        </>
                       ))}
                   </View>
                 );
@@ -306,15 +443,11 @@ export default function HomeScreen() {
         )}
       </ScrollView>
 
-      {groups.length > 0 ? (
-        <View style={styles.fabRow}>
-          <NotificationBell embedded />
-          {activeGroup ? (
-            <Fab embedded onPress={handleCreateItem} accessibilityLabel="Add item" />
-          ) : null}
-        </View>
+      {groups.length > 0 && activeGroup ? (
+        <Fab onPress={handleCreateItem} accessibilityLabel="Add item" />
       ) : null}
-    </SafeAreaView>
+      </SafeAreaView>
+    </MainTabScreen>
   );
 }
 
@@ -330,15 +463,6 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: spacing.xxl + 56,
   },
-  fabRow: {
-    position: 'absolute',
-    right: layout.screenPadding,
-    bottom: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    zIndex: 10,
-  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -346,6 +470,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: layout.screenPadding,
     marginBottom: spacing.sm,
+  },
+  sectionHeaderSpaced: {
+    marginTop: spacing.md,
   },
   filterButton: {
     flexShrink: 0,
@@ -399,6 +526,16 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  daySectionOverdue: {
+    borderWidth: 1.5,
+    borderColor: colors.error,
+    backgroundColor: colors.surface,
+    shadowColor: colors.error,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
+  },
   dayHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -420,6 +557,10 @@ const styles = StyleSheet.create({
   dayHeaderTextHasItems: {
     fontWeight: '700',
     color: colors.text,
+  },
+  dayHeaderTextOverdue: {
+    fontWeight: '700',
+    color: colors.error,
   },
   emptyDay: {
     fontSize: 14,

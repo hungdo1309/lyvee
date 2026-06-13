@@ -739,7 +739,7 @@ export function ItemComments({
   const scrollReplyComposerIntoView = useCallback(() => {
     const scrollTargets = () => {
       scrollTargetIntoView(inlineReplyComposerRef.current);
-      scrollFocusedInputIntoView(scrollToFocus, replyInputRef.current);
+      scrollFocusedInputIntoView(scrollToFocus, inlineReplyComposerRef.current);
     };
 
     requestAnimationFrame(scrollTargets);
@@ -1080,6 +1080,7 @@ export function ItemComments({
     <View
       style={[styles.container, compactBottom && styles.containerCompactBottom]}
       ref={composerRef}
+      collapsable={false}
     >
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionLabel}>Comments</Text>
@@ -1189,7 +1190,6 @@ export function ItemComments({
                       ref={inlineReplyComposerRef}
                       collapsable={false}
                       style={styles.inlineReplyRow}
-                      onLayout={scrollReplyComposerIntoView}
                     >
                       <CommentComposerPanel
                         variant="inline"

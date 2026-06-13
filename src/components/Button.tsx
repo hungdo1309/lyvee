@@ -11,7 +11,7 @@ import { formatButtonLabel } from '../utils/strings';
 
 interface ButtonProps extends TouchableOpacityProps {
   title: string;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'cancel';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'cancel' | 'money';
   loading?: boolean;
   size?: 'sm' | 'md' | 'lg';
   preserveTitle?: boolean;
@@ -48,7 +48,7 @@ export function Button({
       {loading ? (
         <ActivityIndicator
           color={
-            variant === 'primary' || variant === 'cancel'
+            variant === 'primary' || variant === 'cancel' || variant === 'money'
               ? colors.onPrimary
               : colors.primary
           }
@@ -80,6 +80,9 @@ const styles = StyleSheet.create({
   },
   cancel: {
     backgroundColor: colors.error,
+  },
+  money: {
+    backgroundColor: colors.money,
   },
   size_sm: {
     paddingVertical: spacing.sm,
@@ -114,6 +117,9 @@ const styles = StyleSheet.create({
     color: colors.error,
   },
   text_cancel: {
+    color: colors.onPrimary,
+  },
+  text_money: {
     color: colors.onPrimary,
   },
 });

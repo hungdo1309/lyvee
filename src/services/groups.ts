@@ -25,6 +25,7 @@ import {
 } from '../utils/groupRoles';
 import { deleteItemsForGroup } from './items';
 import { cancelGroupBilling } from './billing';
+import { getGroup } from './groupLookup';
 import {
   notifyGroupDeleted,
   notifyGroupMemberJoined,
@@ -37,6 +38,15 @@ import {
 } from './groupNotifications';
 
 export { isGroupOwner, isGroupAdmin, canManageGroup, canDeleteGroup } from '../utils/groupRoles';
+export { getGroup } from './groupLookup';
+
+async function ensureDefaultGroupExpenseForMember(
+  userId: string,
+  groupId: string
+): Promise<void> {
+  const { ensureDefaultGroupExpenseGroup } = await import('./expenseGroups');
+  await ensureDefaultGroupExpenseGroup(userId, groupId);
+}
 
 function generateInviteCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -89,13 +99,12 @@ export async function createGroup(
   };
   await setDoc(doc(db, 'groups', id), group);
   await saveInviteMapping(group);
+  await ensureDefaultGroupExpenseForMember(ownerId, id);
   return group;
 }
 
 export async function getGroupById(groupId: string): Promise<Group | null> {
-  const snapshot = await getDoc(doc(db, 'groups', groupId));
-  if (!snapshot.exists()) return null;
-  return normalizeGroup(snapshot.data() as Group);
+  return getGroup(groupId);
 }
 
 export async function joinGroupByInviteCode(
@@ -122,13 +131,8 @@ export async function joinGroupByInviteCode(
 
   const group = normalizeGroup(groupSnap.data() as Group);
   await notifyGroupMemberJoined(group, userId);
+  await ensureDefaultGroupExpenseForMember(userId, group.id);
   return group;
-}
-
-export async function getGroup(groupId: string): Promise<Group | null> {
-  const snapshot = await getDoc(doc(db, 'groups', groupId));
-  if (!snapshot.exists()) return null;
-  return normalizeGroup(snapshot.data() as Group);
 }
 
 export function subscribeToUserGroups(
@@ -330,6 +334,8 @@ export async function deleteGroup(
 
   await notifyGroupDeleted(group, requesterId);
   await deleteItemsForGroup(groupId);
+  const { deleteExpenseGroupsForGroup } = await import('./expenseGroups');
+  await deleteExpenseGroupsForGroup(groupId);
   await cancelGroupBilling(groupId, requesterId);
   await deleteDoc(doc(db, 'invites', group.inviteCode));
   await deleteDoc(doc(db, 'groups', groupId));

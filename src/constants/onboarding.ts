@@ -8,7 +8,7 @@ import { itemTypeConfig } from './theme';
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 export const ONBOARDING_SETUP_STEPS = 2;
-export const ONBOARDING_TOUR_STEPS = 4;
+export const ONBOARDING_TOUR_STEPS = 5;
 
 export const ONBOARDING_SKIP_TUTORIAL_LABEL = 'Skip Tutorial';
 export const ONBOARDING_TOUR_EXIT_LABEL = 'I will figure it out myself';
@@ -133,6 +133,26 @@ export const ONBOARDING_SHARING_FEATURES: OnboardingFeatureItem[] = [
   },
 ];
 
+export const ONBOARDING_TRIPS_EXPENSES_TITLE = 'Trips & expenses';
+
+export const ONBOARDING_TRIPS_EXPENSES_SUBTITLE =
+  'Plan travel together and split shared costs with your group.';
+
+export const ONBOARDING_TRIPS_EXPENSES_FEATURES: OnboardingFeatureItem[] = [
+  {
+    icon: 'airplane-outline',
+    title: 'Trips',
+    description:
+      'Add a trip with dates and destinations. Build a day-by-day plan with flights, stays, and activities.',
+  },
+  {
+    icon: 'cash-outline',
+    title: 'Expenses',
+    description:
+      'Track who paid, split bills fairly, and settle up from the Expenses tab or your Home screen.',
+  },
+];
+
 export const ONBOARDING_REMINDERS_TITLE = 'Reminders';
 
 export const ONBOARDING_REMINDERS_SUBTITLE = `Turn on reminders so ${APP_NAME} can nudge you before due dates and expirations.`;
@@ -204,7 +224,7 @@ export function getOnboardingSetupStepProps(
 }
 
 export function getOnboardingTourStepProps(
-  tourStep: 1 | 2 | 3 | 4
+  tourStep: 1 | 2 | 3 | 4 | 5
 ): { step: number; totalSteps: number } {
   return { step: tourStep, totalSteps: ONBOARDING_TOUR_STEPS };
 }

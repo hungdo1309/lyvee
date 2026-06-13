@@ -1,5 +1,7 @@
+import React, { useMemo, useState } from 'react';
+import { StyleSheet } from 'react-native';
 import { withLayoutContext } from 'expo-router';
-import { Text, StyleSheet, type ColorValue } from 'react-native';
+import { Drawer } from 'react-native-drawer-layout';
 import {
   createMaterialTopTabNavigator,
   type MaterialTopTabNavigationEventMap,
@@ -7,10 +9,10 @@ import {
 } from '@react-navigation/material-top-tabs';
 import type { ParamListBase, TabNavigationState } from '@react-navigation/native';
 import { useApp } from '../../../src/context/AppContext';
+import { AppDrawerProvider } from '../../../src/context/AppDrawerContext';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
-import { TopTabBar } from '../../../src/components/TopTabBar';
-import { GROUPS_ICON_SIZES, GroupsIcon } from '../../../src/components/GroupsIcon';
-import { colors, layout, spacing } from '../../../src/constants/theme';
+import { AppDrawerContent } from '../../../src/components/AppDrawerContent';
+import { colors } from '../../../src/constants/theme';
 
 const { Navigator } = createMaterialTopTabNavigator();
 
@@ -23,95 +25,62 @@ const MaterialTopTabs = withLayoutContext<
 
 export default function TabsLayout() {
   const { ready } = useApp();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const drawerContext = useMemo(
+    () => ({
+      openDrawer: () => setDrawerOpen(true),
+      closeDrawer: () => setDrawerOpen(false),
+    }),
+    []
+  );
 
   if (!ready) return <LoadingScreen />;
 
   return (
-    <MaterialTopTabs
-      initialRouteName="home"
-      tabBar={(props) => <TopTabBar {...props} />}
-      screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarShowIcon: true,
-        tabBarIndicatorStyle: styles.tabIndicator,
-        tabBarStyle: styles.tabBar,
-        tabBarLabelStyle: styles.tabLabel,
-        tabBarItemStyle: styles.tabItem,
-        tabBarPressColor: colors.primaryLight,
-        swipeEnabled: true,
-        lazy: true,
-        sceneStyle: styles.scene,
-      }}
-    >
-      <MaterialTopTabs.Screen
-        name="home"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <TabIcon icon="🏠" activeColor={color} />,
-        }}
-      />
-      <MaterialTopTabs.Screen
-        name="index"
-        options={{
-          title: 'Calendar',
-          tabBarIcon: ({ color }) => <TabIcon icon="📅" activeColor={color} />,
-        }}
-      />
-      <MaterialTopTabs.Screen
-        name="groups"
-        options={{
-          title: 'Groups',
-          tabBarIcon: ({ color }) => (
-            <GroupsIcon size={GROUPS_ICON_SIZES.tab} color={String(color)} />
-          ),
-        }}
-      />
-      <MaterialTopTabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ color }) => <TabIcon icon="⚙️" activeColor={color} />,
-        }}
-      />
-    </MaterialTopTabs>
-  );
-}
-
-function TabIcon({ icon, activeColor }: { icon: string; activeColor: ColorValue }) {
-  const isActive = activeColor === colors.primary;
-  return (
-    <Text style={{ fontSize: 18, opacity: isActive ? 1 : 0.5 }}>
-      {icon}
-    </Text>
+    <AppDrawerProvider value={drawerContext}>
+      <Drawer
+        open={drawerOpen}
+        onOpen={() => setDrawerOpen(true)}
+        onClose={() => setDrawerOpen(false)}
+        drawerPosition="left"
+        drawerType="front"
+        swipeEnabled
+        swipeEdgeWidth={48}
+        drawerStyle={styles.drawer}
+        overlayStyle={styles.overlay}
+        renderDrawerContent={() => <AppDrawerContent />}
+      >
+        <MaterialTopTabs
+          initialRouteName="home"
+          tabBar={() => null}
+          screenOptions={{
+            swipeEnabled: true,
+            lazy: true,
+            sceneStyle: styles.scene,
+          }}
+        >
+          <MaterialTopTabs.Screen name="home" />
+          <MaterialTopTabs.Screen name="index" />
+          <MaterialTopTabs.Screen name="trips" />
+          <MaterialTopTabs.Screen name="expenses" />
+          <MaterialTopTabs.Screen name="groups" />
+          <MaterialTopTabs.Screen name="settings" />
+        </MaterialTopTabs>
+      </Drawer>
+    </AppDrawerProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  scene: {
-    paddingTop: layout.tabContentTopPadding,
-    backgroundColor: colors.background,
-  },
-  tabBar: {
+  drawer: {
+    width: 280,
     backgroundColor: colors.surface,
-    borderBottomColor: colors.borderLight,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    elevation: 0,
-    shadowOpacity: 0,
   },
-  tabIndicator: {
-    backgroundColor: colors.primary,
-    height: 2,
+  overlay: {
+    backgroundColor: colors.overlay,
   },
-  tabLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    textTransform: 'none',
-    marginTop: 2,
-  },
-  tabItem: {
-    flexDirection: 'column',
-    paddingVertical: spacing.sm,
-    minHeight: 52,
+  scene: {
+    backgroundColor: colors.background,
   },
 });

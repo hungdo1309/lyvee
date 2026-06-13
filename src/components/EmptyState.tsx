@@ -46,7 +46,13 @@ export function EmptyState({
       >
         {iconNode ?? (
           <Text
-            style={[styles.icon, { fontSize: iconSize, lineHeight: iconSize }]}
+            style={[
+              styles.icon,
+              {
+                fontSize: iconSize,
+                lineHeight: Math.round(iconSize * 1.25),
+              },
+            ]}
             allowFontScaling={false}
           >
             {icon}

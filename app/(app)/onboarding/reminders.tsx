@@ -17,7 +17,7 @@ import { useFinishOnboarding } from '../../../src/hooks/useFinishOnboarding';
 export default function OnboardingRemindersScreen() {
   const params = useLocalSearchParams<{ groupId?: string | string[] }>();
   const groupId = normalizeOnboardingGroupId(params.groupId);
-  const stepProps = getOnboardingTourStepProps(4);
+  const stepProps = getOnboardingTourStepProps(5);
   const { finish, finishing } = useFinishOnboarding();
 
   return (

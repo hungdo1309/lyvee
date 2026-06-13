@@ -16,6 +16,7 @@ import { GroupSelector } from '../../../src/components/GroupSelector';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { NoGroupsPrompt } from '../../../src/components/NoGroupsPrompt';
 import { Fab } from '../../../src/components/Fab';
+import { MainTabScreen } from '../../../src/components/MainTabScreen';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
 import { useGroupMembers } from '../../../src/hooks/useGroupMembers';
 import { toggleItemComplete, deleteItem } from '../../../src/services/items';
@@ -31,12 +32,13 @@ import {
   getMonthInstanceCounts,
   formatMonthItemSummary,
 } from '../../../src/utils/itemInstances';
+import { TripPlanInstance } from '../../../src/utils/tripInstances';
 import { format, parseISO } from 'date-fns';
 import { colors, layout, radius, spacing, typography } from '../../../src/constants/theme';
 
 export default function CalendarScreen() {
   const { user } = useAuth();
-  const { groups, activeGroup, selectGroup, loading, getGroupItems } = useApp();
+  const { groups, activeGroup, selectGroup, loading, getGroupItems, getGroupTrips } = useApp();
   const [filters, setFilters] = useState<CalendarFilters>(DEFAULT_CALENDAR_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() => format(new Date(), 'yyyy-MM-dd'));
@@ -45,6 +47,7 @@ export default function CalendarScreen() {
   const { members: groupMembers } = useGroupMembers(activeGroup?.members ?? []);
 
   const groupItems = activeGroup ? getGroupItems(activeGroup.id) : [];
+  const groupTrips = activeGroup ? getGroupTrips(activeGroup.id) : [];
 
   const availableTags = useMemo(
     () => collectTagsFromItems(groupItems),
@@ -58,11 +61,9 @@ export default function CalendarScreen() {
 
   const monthItemSummary = useMemo(() => {
     const month = parseISO(visibleMonth);
-    const counts = getMonthInstanceCounts(filteredItems, month, {
-      includeExpired: filters.showExpired,
-    });
+    const counts = getMonthInstanceCounts(filteredItems, month);
     return formatMonthItemSummary(month, counts);
-  }, [filteredItems, visibleMonth, filters.showExpired]);
+  }, [filteredItems, visibleMonth]);
 
   const handleToggleComplete = async (instance: ItemInstance) => {
     if (instance.item.type !== 'task') return;
@@ -103,6 +104,17 @@ export default function CalendarScreen() {
     await deleteItem(instance.itemId, user?.id, instance.item);
   };
 
+  const handleOpenTripPlanItem = (instance: TripPlanInstance) => {
+    router.push({
+      pathname: '/(app)/trip/[id]',
+      params: {
+        id: instance.tripId,
+        date: instance.dateKey,
+        entryId: instance.entry.id,
+      },
+    });
+  };
+
   const handleGroupChange = async (groupId: string) => {
     await selectGroup(groupId);
     setFilters(DEFAULT_CALENDAR_FILTERS);
@@ -121,14 +133,17 @@ export default function CalendarScreen() {
 
   if (groups.length === 0) {
     return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        <NoGroupsPrompt />
-      </SafeAreaView>
+      <MainTabScreen title="Calendar">
+        <SafeAreaView style={styles.container} edges={['bottom']}>
+          <NoGroupsPrompt />
+        </SafeAreaView>
+      </MainTabScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <MainTabScreen title="Calendar">
+      <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -180,8 +195,10 @@ export default function CalendarScreen() {
 
             <CalendarView
               items={filteredItems}
+              trips={groupTrips}
               onToggleComplete={handleToggleComplete}
               onOpenItem={handleOpenItem}
+              onOpenTripPlanItem={handleOpenTripPlanItem}
               onEditItem={handleEditItem}
               onDeleteItem={handleDeleteItem}
               groupMembers={groupMembers}
@@ -191,7 +208,6 @@ export default function CalendarScreen() {
               onVisibleMonthChange={setVisibleMonth}
               selectedDate={selectedDate}
               onSelectedDateChange={setSelectedDate}
-              includeExpired={filters.showExpired}
             />
           </>
         )}
@@ -207,7 +223,8 @@ export default function CalendarScreen() {
       </ScrollView>
 
       <Fab onPress={handleCreateItem} accessibilityLabel="Add item" />
-    </SafeAreaView>
+      </SafeAreaView>
+    </MainTabScreen>
   );
 }
 

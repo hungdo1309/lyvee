@@ -8,6 +8,9 @@ import { ActivityNotificationsProvider } from '../src/context/ActivityNotificati
 import { AppProvider } from '../src/context/AppContext';
 import { DialogProvider } from '../src/context/DialogContext';
 import { NotificationHandler } from '../src/components/NotificationHandler';
+import { configureDevLogBox } from '../src/utils/devLogBox';
+
+configureDevLogBox();
 
 export default function RootLayout() {
   return (

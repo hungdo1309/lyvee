@@ -201,6 +201,9 @@ function notificationMatchesPushData(
   if (data.type && notification.type !== data.type) return false;
   if (data.groupId && notification.data.groupId !== data.groupId) return false;
   if (data.itemId && notification.data.itemId !== data.itemId) return false;
+  if (data.expenseGroupId && notification.data.expenseGroupId !== data.expenseGroupId) return false;
+  if (data.expenseId && notification.data.expenseId !== data.expenseId) return false;
+  if (data.settlementId && notification.data.settlementId !== data.settlementId) return false;
   if (data.commentId && notification.data.commentId !== data.commentId) return false;
   if (data.reaction && notification.data.reaction !== data.reaction) return false;
   if (data.occurrence && notification.data.occurrence !== data.occurrence) return false;
@@ -211,6 +214,30 @@ async function findUnreadNotificationFromPush(
   userId: string,
   data: Partial<PushNotificationData>
 ): Promise<QueryDocumentSnapshot | null> {
+  if (data.type && data.expenseGroupId) {
+    try {
+      const constraints: QueryConstraint[] = [
+        where('createdAt', '>=', getNotificationRetentionCutoffIso()),
+        where('type', '==', data.type),
+        where('data.expenseGroupId', '==', data.expenseGroupId),
+      ];
+
+      if (data.expenseId) {
+        constraints.push(where('data.expenseId', '==', data.expenseId));
+      } else if (data.settlementId) {
+        constraints.push(where('data.settlementId', '==', data.settlementId));
+      }
+
+      const snapshot = await getDocs(
+        query(notificationsCollection(userId), ...constraints, limit(5))
+      );
+      const match = snapshot.docs.find((docSnap) => !docSnap.data().readAt);
+      if (match) return match;
+    } catch (error) {
+      console.warn('[activityNotifications] expense push lookup:', error);
+    }
+  }
+
   if (data.type && data.itemId) {
     try {
       const constraints: QueryConstraint[] = [

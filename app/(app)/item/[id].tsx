@@ -18,8 +18,8 @@ import { GroupPicker } from '../../../src/components/GroupPicker';
 import { ItemDateTimeField } from '../../../src/components/ItemDateTimeField';
 import { ReminderPicker } from '../../../src/components/ReminderPicker';
 import { useGroupMembers } from '../../../src/hooks/useGroupMembers';
-import { updateItem, deleteItem } from '../../../src/services/items';
-import { colors, spacing, itemTypeConfig, itemTypeSupportsRecurring } from '../../../src/constants/theme';
+import { updateItem, deleteItem, toggleItemComplete } from '../../../src/services/items';
+import { colors, spacing, radius, itemTypeConfig, itemTypeSupportsRecurring } from '../../../src/constants/theme';
 import { itemFormLayout } from '../../../src/constants/itemFormLayout';
 import {
   ItemType,
@@ -36,6 +36,8 @@ import {
   canUserEditItem,
   canUserViewItem,
 } from '../../../src/utils/itemVisibility';
+import { canUserCompleteTask } from '../../../src/utils/assignees';
+import { toOccurrenceKey } from '../../../src/utils/recurrence';
 import { dismissItemFlow } from '../../../src/utils/navigation';
 import { ItemFormScreen } from '../../../src/components/ItemFormScreen';
 import { HeaderSaveButton } from '../../../src/components/HeaderSaveButton';
@@ -44,10 +46,11 @@ import { ScreenBackButton } from '../../../src/components/ScreenBackButton';
 import { ItemComments } from '../../../src/components/ItemComments';
 
 export default function ItemDetailScreen() {
-  const { id, edit, commentId } = useLocalSearchParams<{
+  const { id, edit, commentId, occurrence } = useLocalSearchParams<{
     id: string;
     edit?: string;
     commentId?: string;
+    occurrence?: string;
   }>();
   const { user } = useAuth();
   const { items, groups } = useApp();
@@ -74,7 +77,18 @@ export default function ItemDetailScreen() {
   const [reminderOffset, setReminderOffset] = useState<ItemReminderOffset>('none');
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [isEditing, setIsEditing] = useState(edit === '1');
+
+  const viewingOccurrence = typeof occurrence === 'string' ? occurrence : undefined;
+  const canComplete = item ? canUserCompleteTask(item, user?.id) : false;
+  const isCompleted = useMemo(() => {
+    if (!item || item.type !== 'task') return false;
+    if (item.recurringRule.frequency !== 'none' && viewingOccurrence) {
+      return (item.completedOccurrences ?? []).includes(toOccurrenceKey(viewingOccurrence));
+    }
+    return item.completed;
+  }, [item, viewingOccurrence]);
 
   const resetForm = useCallback(() => {
     if (!item) return;
@@ -118,6 +132,26 @@ export default function ItemDetailScreen() {
       setDeleting(false);
     }
   }, [item, canEdit, user?.id]);
+
+  const handleToggleComplete = useCallback(async () => {
+    if (!item || !canComplete || item.type !== 'task') return;
+    setCompleting(true);
+    try {
+      await toggleItemComplete(
+        item,
+        item.recurringRule.frequency !== 'none' ? viewingOccurrence : undefined,
+        user?.id,
+        itemGroup?.members
+      );
+    } catch (error: unknown) {
+      appAlert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to update task'
+      );
+    } finally {
+      setCompleting(false);
+    }
+  }, [item, canComplete, viewingOccurrence, user?.id, itemGroup?.members]);
 
   const handleDeletePress = useCallback(() => {
     if (!item || !canEdit) return;
@@ -254,6 +288,36 @@ export default function ItemDetailScreen() {
         onChangeText={setTitle}
         editable={!readOnly}
       />
+      {readOnly && item.type === 'task' ? (
+        <View style={styles.completeSection}>
+          <Text style={styles.sectionLabel}>Status</Text>
+          <TouchableOpacity
+            style={[
+              styles.completeRow,
+              !canComplete && styles.completeRowDisabled,
+            ]}
+            onPress={handleToggleComplete}
+            disabled={!canComplete || completing}
+            activeOpacity={canComplete ? 0.85 : 1}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: isCompleted, disabled: !canComplete || completing }}
+            accessibilityLabel={isCompleted ? 'Task completed' : 'Mark task as complete'}
+          >
+            <View style={[styles.checkbox, isCompleted && styles.checkboxDone]}>
+              {isCompleted ? <Text style={styles.checkmark}>✓</Text> : null}
+            </View>
+            <Text
+              style={[
+                styles.completeLabel,
+                isCompleted && styles.completeLabelDone,
+                !canComplete && styles.completeLabelDisabled,
+              ]}
+            >
+              {isCompleted ? 'Completed' : 'Mark as complete'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       <TagInput tags={tags} onChange={setTags} readOnly={readOnly} />
       <ItemFormOptions
         type={type}
@@ -395,5 +459,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textMuted,
     marginTop: spacing.xs,
+  },
+  completeSection: {
+    marginBottom: spacing.md,
+  },
+  completeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  completeRowDisabled: {
+    opacity: 0.72,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: radius.full,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxDone: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  checkmark: {
+    color: colors.onPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  completeLabel: {
+    fontSize: 16,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  completeLabelDone: {
+    color: colors.textSecondary,
+  },
+  completeLabelDisabled: {
+    color: colors.textMuted,
   },
 });

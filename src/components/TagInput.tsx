@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { TagPills } from './TagPills';
 import { addTag, parseTagInput } from '../utils/tags';
-import { colors, radius, spacing } from '../constants/theme';
+import { colors, radius, spacing, typography } from '../constants/theme';
 import {
   scrollFocusedInputIntoView,
   useKeyboardFocusScroll,
@@ -14,6 +14,17 @@ interface TagInputProps {
   label?: string;
   placeholder?: string;
   readOnly?: boolean;
+  maxTags?: number;
+}
+
+function addTagWithLimit(tags: string[], raw: string, maxTags?: number): string[] {
+  if (maxTags === 1) {
+    const next = addTag([], raw);
+    return next.slice(0, 1);
+  }
+
+  const next = addTag(tags, raw);
+  return maxTags ? next.slice(0, maxTags) : next;
 }
 
 export function TagInput({
@@ -22,13 +33,15 @@ export function TagInput({
   label = 'Tags',
   placeholder = 'Type a tag, press enter or comma',
   readOnly = false,
+  maxTags,
 }: TagInputProps) {
   const [draft, setDraft] = useState('');
   const inputRef = useRef<TextInput>(null);
+  const measureRef = useRef<View>(null);
   const scrollToFocus = useKeyboardFocusScroll();
 
   const commitDraft = (raw: string) => {
-    const next = addTag(tags, raw);
+    const next = addTagWithLimit(tags, raw, maxTags);
     if (next.length !== tags.length || next.some((t, i) => t !== tags[i])) {
       onChange(next);
     }
@@ -40,7 +53,7 @@ export function TagInput({
       const { tags: parsed, remainder } = parseTagInput(text);
       let next = tags;
       for (const tag of parsed) {
-        next = addTag(next, tag);
+        next = addTagWithLimit(next, tag, maxTags);
       }
       onChange(next);
       setDraft(remainder);
@@ -52,6 +65,12 @@ export function TagInput({
   const handleSubmit = () => {
     if (draft.trim()) commitDraft(draft);
   };
+
+  const atMax = maxTags !== undefined && tags.length >= maxTags;
+  const hint =
+    maxTags === 1
+      ? 'Press enter or comma to add · one tag only'
+      : 'Press enter or comma to add · tags are lowercase';
 
   if (readOnly) {
     return (
@@ -73,7 +92,7 @@ export function TagInput({
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
-      <View style={styles.inputWrap}>
+      <View ref={measureRef} collapsable={false} style={styles.inputWrap}>
         {tags.length > 0 && (
           <View style={styles.chips}>
             <TagPills
@@ -83,22 +102,24 @@ export function TagInput({
             />
           </View>
         )}
-        <TextInput
-          ref={inputRef}
-          style={styles.input}
-          value={draft}
-          onChangeText={handleChangeText}
-          onSubmitEditing={handleSubmit}
-          onFocus={() => scrollFocusedInputIntoView(scrollToFocus, inputRef.current)}
-          placeholder={tags.length === 0 ? placeholder : 'Add another…'}
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="done"
-          blurOnSubmit={false}
-        />
+        {(!maxTags || tags.length < maxTags) && (
+          <TextInput
+            ref={inputRef}
+            style={styles.input}
+            value={draft}
+            onChangeText={handleChangeText}
+            onSubmitEditing={handleSubmit}
+            onFocus={() => scrollFocusedInputIntoView(scrollToFocus, measureRef.current)}
+            placeholder={tags.length === 0 ? placeholder : 'Add another…'}
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="done"
+            blurOnSubmit={false}
+          />
+        )}
       </View>
-      <Text style={styles.hint}>Press enter or comma to add · tags are lowercase</Text>
+      <Text style={styles.hint}>{hint}</Text>
     </View>
   );
 }
@@ -108,11 +129,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    ...typography.label,
     marginBottom: spacing.sm,
   },
   inputWrap: {

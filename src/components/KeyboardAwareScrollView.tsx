@@ -8,11 +8,12 @@ import React, {
 } from 'react';
 import {
   Dimensions,
+  findNodeHandle,
   Keyboard,
   Platform,
   ScrollView,
   StyleSheet,
-  type NativeMethods,
+  UIManager,
   type ScrollViewProps,
   type StyleProp,
   type ViewStyle,
@@ -22,14 +23,79 @@ import { spacing } from '../constants/theme';
 type KeyboardAwareScrollViewProps = ScrollViewProps & {
   containerStyle?: StyleProp<ViewStyle>;
   keyboardVerticalOffset?: number;
+  /** When false, the scroll view sizes from its content/maxHeight instead of flexing to fill. */
+  fill?: boolean;
 };
 
-type ScrollToFocusedInput = (target: NativeMethods | null | undefined) => void;
+type ScrollToFocusedInput = (target: MeasurableTarget) => void;
 
 const KeyboardFocusContext = createContext<ScrollToFocusedInput | null>(null);
 const ScrollIntoViewContext = createContext<ScrollToFocusedInput | null>(null);
 
 const SCROLL_GAP = spacing.lg * 2;
+const DEFAULT_KEYBOARD_HEIGHT = Platform.OS === 'ios' ? 291 : 280;
+
+type MeasureInWindowCallback = (
+  x: number,
+  y: number,
+  width: number,
+  height: number
+) => void;
+
+type MeasurableTarget = React.Component | null | undefined;
+
+type NativeMeasurable = {
+  measureInWindow?: (callback: MeasureInWindowCallback) => void;
+};
+
+function tryMeasureInWindow(
+  target: NativeMeasurable,
+  callback: MeasureInWindowCallback
+): boolean {
+  if (typeof target.measureInWindow !== 'function') {
+    return false;
+  }
+
+  try {
+    target.measureInWindow(callback);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Measure a mounted native view in window coordinates without calling measureLayout. */
+export function measureTargetInWindow(
+  target: MeasurableTarget,
+  callback: MeasureInWindowCallback
+): boolean {
+  if (!target) return false;
+
+  if (tryMeasureInWindow(target as NativeMeasurable, callback)) {
+    return true;
+  }
+
+  let node: number | null = null;
+  try {
+    const handle = findNodeHandle(target as React.Component);
+    if (typeof handle === 'number') {
+      node = handle;
+    }
+  } catch {
+    return false;
+  }
+
+  if (node == null || typeof UIManager.measureInWindow !== 'function') {
+    return false;
+  }
+
+  try {
+    UIManager.measureInWindow(node, callback);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function useKeyboardFocusScroll(): ScrollToFocusedInput | null {
   return useContext(KeyboardFocusContext);
@@ -41,15 +107,18 @@ export function useScrollIntoView(): ScrollToFocusedInput | null {
 
 export function scrollFocusedInputIntoView(
   scrollToFocus: ScrollToFocusedInput | null,
-  target: NativeMethods | null | undefined
+  target: MeasurableTarget
 ) {
   if (!scrollToFocus || !target) return;
   scrollToFocus(target);
+  requestAnimationFrame(() => {
+    if (target) scrollToFocus(target);
+  });
 }
 
 export function scrollElementIntoView(
   scrollIntoView: ScrollToFocusedInput | null,
-  target: NativeMethods | null | undefined
+  target: MeasurableTarget
 ) {
   if (!scrollIntoView || !target) return;
   scrollIntoView(target);
@@ -61,6 +130,9 @@ export function KeyboardAwareScrollView({
   containerStyle,
   contentContainerStyle,
   keyboardVerticalOffset = 0,
+  keyboardShouldPersistTaps = 'handled',
+  showsVerticalScrollIndicator = false,
+  fill = true,
   onScroll,
   ...scrollViewProps
 }: KeyboardAwareScrollViewProps) {
@@ -68,23 +140,27 @@ export function KeyboardAwareScrollView({
   const scrollYRef = useRef(0);
   const keyboardHeightRef = useRef(0);
   const keyboardScreenYRef = useRef<number | null>(null);
-  const pendingTargetRef = useRef<NativeMethods | null>(null);
+  const pendingTargetRef = useRef<MeasurableTarget>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const getVisibleBounds = useCallback(() => {
     const windowHeight = Dimensions.get('window').height;
     const visibleTop = keyboardVerticalOffset + SCROLL_GAP;
-    const visibleBottom =
-      (keyboardScreenYRef.current ?? windowHeight) - keyboardVerticalOffset - SCROLL_GAP;
+    const keyboardTop =
+      keyboardScreenYRef.current ??
+      (keyboardHeightRef.current > 0
+        ? windowHeight - keyboardHeightRef.current
+        : windowHeight - DEFAULT_KEYBOARD_HEIGHT);
+    const visibleBottom = keyboardTop - keyboardVerticalOffset - SCROLL_GAP;
 
     return { visibleTop, visibleBottom };
   }, [keyboardVerticalOffset]);
 
   const scrollTargetIntoView = useCallback(
-    (target: NativeMethods | null | undefined) => {
+    (target: MeasurableTarget) => {
       if (!target || !scrollRef.current) return;
 
-      target.measureInWindow((_x, y, _width, height) => {
+      const measured = measureTargetInWindow(target, (_x, y, _width, height) => {
         const { visibleTop, visibleBottom } = getVisibleBounds();
         const targetBottom = y + height;
         let delta = 0;
@@ -97,24 +173,26 @@ export function KeyboardAwareScrollView({
 
         if (delta === 0) return;
 
+        const nextY = Math.max(0, scrollYRef.current + delta);
+        scrollYRef.current = nextY;
         scrollRef.current?.scrollTo({
-          y: Math.max(0, scrollYRef.current + delta),
-          animated: true,
+          y: nextY,
+          animated: false,
         });
       });
+
+      if (!measured) return;
     },
     [getVisibleBounds]
   );
 
   const flushPendingScroll = useCallback(() => {
     if (!pendingTargetRef.current) return;
-    const target = pendingTargetRef.current;
-    pendingTargetRef.current = null;
-    scrollTargetIntoView(target);
+    scrollTargetIntoView(pendingTargetRef.current);
   }, [scrollTargetIntoView]);
 
   const scrollElementIntoView = useCallback(
-    (target: NativeMethods | null | undefined) => {
+    (target: MeasurableTarget) => {
       scrollTargetIntoView(target);
     },
     [scrollTargetIntoView]
@@ -124,19 +202,9 @@ export function KeyboardAwareScrollView({
     (target) => {
       if (!target) return;
 
-      const run = () => {
-        if (keyboardHeightRef.current <= 0) {
-          pendingTargetRef.current = target;
-          return;
-        }
-        scrollTargetIntoView(target);
-      };
-
-      run();
-      requestAnimationFrame(run);
-      setTimeout(run, 100);
-      setTimeout(run, 250);
-      setTimeout(run, Platform.OS === 'ios' ? 400 : 500);
+      pendingTargetRef.current = target;
+      scrollTargetIntoView(target);
+      requestAnimationFrame(() => scrollTargetIntoView(target));
     },
     [scrollTargetIntoView]
   );
@@ -149,9 +217,8 @@ export function KeyboardAwareScrollView({
       keyboardHeightRef.current = event.endCoordinates.height;
       keyboardScreenYRef.current = event.endCoordinates.screenY;
       setKeyboardHeight(event.endCoordinates.height);
+      flushPendingScroll();
       requestAnimationFrame(flushPendingScroll);
-      setTimeout(flushPendingScroll, Platform.OS === 'ios' ? 50 : 100);
-      setTimeout(flushPendingScroll, Platform.OS === 'ios' ? 200 : 300);
     });
 
     const hideSub = Keyboard.addListener(hideEvent, () => {
@@ -168,9 +235,7 @@ export function KeyboardAwareScrollView({
   }, [flushPendingScroll]);
 
   const keyboardPadding =
-    keyboardHeight > 0 && Platform.OS === 'ios'
-      ? { paddingBottom: keyboardHeight + spacing.lg }
-      : null;
+    keyboardHeight > 0 ? { paddingBottom: keyboardHeight + spacing.lg } : null;
 
   return (
     <KeyboardFocusContext.Provider value={scrollToFocusedInput}>
@@ -178,13 +243,15 @@ export function KeyboardAwareScrollView({
         <ScrollView
           ref={scrollRef}
           {...scrollViewProps}
-          style={[styles.flex, containerStyle, style]}
+          style={[fill ? styles.flex : null, containerStyle, style]}
           contentContainerStyle={[
             styles.content,
             contentContainerStyle,
             keyboardPadding,
           ]}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+          showsVerticalScrollIndicator={showsVerticalScrollIndicator}
+          scrollIndicatorInsets={{ right: spacing.xs }}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           automaticallyAdjustKeyboardInsets={false}
           nestedScrollEnabled

@@ -9,6 +9,7 @@ export default function OnboardingLayout() {
       <Stack.Screen name="item-types" />
       <Stack.Screen name="calendar" />
       <Stack.Screen name="sharing" />
+      <Stack.Screen name="trips-expenses" />
       <Stack.Screen name="reminders" />
     </Stack>
   );

@@ -8,6 +8,7 @@ import { GoogleSignInCancelledError, useAuth } from '../../../src/context/AuthCo
 import { Button } from '../../../src/components/Button';
 import { Card } from '../../../src/components/Card';
 import { InfoRow, SectionCard } from '../../../src/components/SectionCard';
+import { MainTabScreen } from '../../../src/components/MainTabScreen';
 import { colors, layout, radius, spacing, typography } from '../../../src/constants/theme';
 import { APP_NAME } from '../../../src/constants/app';
 import { getNameInitials } from '../../../src/utils/names';
@@ -64,7 +65,8 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <MainTabScreen title="Settings">
+      <SafeAreaView style={styles.container} edges={['bottom']}>
       <Card style={styles.profileCard}>
         <View style={styles.profileRow}>
           <View style={styles.avatar}>
@@ -135,7 +137,8 @@ export default function SettingsScreen() {
       <View style={styles.footer}>
         <Button title="Sign out" variant="cancel" onPress={handleLogout} />
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </MainTabScreen>
   );
 }
 

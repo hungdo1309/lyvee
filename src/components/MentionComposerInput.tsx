@@ -164,6 +164,7 @@ export const MentionComposerInput = React.forwardRef<TextInput, MentionComposerI
       autoGrow ? minInputHeight : undefined
     );
     const inputRef = useRef<TextInput>(null);
+    const measureRef = useRef<View>(null);
     const scrollToFocus = useKeyboardFocusScroll();
     const isReadOnly = editable === false;
     const textValue = typeof value === 'string' ? value : '';
@@ -194,10 +195,10 @@ export const MentionComposerInput = React.forwardRef<TextInput, MentionComposerI
 
       if (focused && !isReadOnly) {
         requestAnimationFrame(() => {
-          scrollFocusedInputIntoView(scrollToFocus, inputRef.current);
+          scrollFocusedInputIntoView(scrollToFocus, measureRef.current);
         });
         setTimeout(() => {
-          scrollFocusedInputIntoView(scrollToFocus, inputRef.current);
+          scrollFocusedInputIntoView(scrollToFocus, measureRef.current);
         }, 100);
       }
     };
@@ -221,6 +222,8 @@ export const MentionComposerInput = React.forwardRef<TextInput, MentionComposerI
             />
           ) : null}
           <View
+            ref={measureRef}
+            collapsable={false}
             style={[
               styles.inputWrapper,
               focused && !isReadOnly && styles.inputWrapperFocused,
@@ -255,7 +258,7 @@ export const MentionComposerInput = React.forwardRef<TextInput, MentionComposerI
               setFocused(true);
               onFocus?.(event);
               if (!isReadOnly) {
-                scrollFocusedInputIntoView(scrollToFocus, inputRef.current);
+                scrollFocusedInputIntoView(scrollToFocus, measureRef.current);
               }
             }}
             onBlur={(event) => {

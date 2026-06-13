@@ -28,6 +28,11 @@ export function formatUpcomingDayHeader(dateKey: string, count: number): string 
   return `${label} · ${countLabel}`;
 }
 
+export function formatOverdueSectionHeader(count: number): string {
+  const countLabel = count === 1 ? '1 task' : `${count} tasks`;
+  return `Overdue · ${countLabel}`;
+}
+
 export function formatUpcomingSectionTitle(dateKey: string): string {
   const date = parseISO(dateKey);
   if (isToday(date)) return 'Today';

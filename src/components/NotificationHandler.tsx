@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { useAuth } from '../context/AuthContext';
 import { markActivityNotificationReadFromPush } from '../services/activityNotifications';
@@ -37,12 +38,26 @@ export function NotificationHandler() {
         return;
       }
 
-      if (data.itemId) {
+      const reminder = data as Partial<ReminderPayload>;
+
+      if (reminder.tripId) {
+        router.push({
+          pathname: '/(app)/trip/[id]',
+          params: {
+            id: reminder.tripId,
+            ...(reminder.dateKey ? { date: reminder.dateKey } : {}),
+            ...(reminder.entryId ? { entryId: reminder.entryId } : {}),
+          },
+        });
+        return;
+      }
+
+      if (reminder.itemId) {
         navigateFromNotificationData({
           type: 'item.updated',
-          itemId: data.itemId,
-          groupId: data.groupId,
-          occurrence: data.occurrence,
+          itemId: reminder.itemId,
+          groupId: reminder.groupId,
+          occurrence: reminder.occurrence,
         });
       }
     };

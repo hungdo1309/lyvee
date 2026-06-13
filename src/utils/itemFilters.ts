@@ -43,7 +43,6 @@ export interface CalendarFilters {
   visibilityMember: VisibilityMemberFilter;
   assigneeId: string | 'all' | 'unassigned';
   tags: string[];
-  showExpired: boolean;
 }
 
 export const DEFAULT_CALENDAR_FILTERS: CalendarFilters = {
@@ -51,7 +50,6 @@ export const DEFAULT_CALENDAR_FILTERS: CalendarFilters = {
   visibilityMember: 'all',
   assigneeId: 'all',
   tags: [],
-  showExpired: false,
 };
 
 export function filterItemsByCalendarFilters(
@@ -93,7 +91,6 @@ export function hasActiveCalendarFilters(filters: CalendarFilters): boolean {
     filters.type !== 'all' ||
     filters.visibilityMember !== 'all' ||
     filters.assigneeId !== 'all' ||
-    filters.tags.length > 0 ||
-    filters.showExpired
+    filters.tags.length > 0
   );
 }

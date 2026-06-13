@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { appAlert } from '../utils/dialog';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { addMonths } from 'date-fns';
-import { ItemInstance, expandItem } from '../utils/itemInstances';
+import { ItemInstance, expandItem, isOverdueCalendarInstance } from '../utils/itemInstances';
 import { colors, itemTypeConfig, radius, spacing, itemTypeSupportsRecurring } from '../constants/theme';
 import { formatItemDate, formatItemDateShort } from '../utils/dates';
 import { formatRecurringLabel, toOccurrenceKey } from '../utils/recurrence';
@@ -59,6 +59,7 @@ export const ItemCard = React.memo(function ItemCard({
   }, [item, isRecurring]);
 
   const displayDate = viewingOccurrence ?? item.dateTime;
+  const isOverdue = isOverdueCalendarInstance(instance);
 
   const handleDeletePress = () => {
     if (!onDelete) return;
@@ -132,7 +133,11 @@ export const ItemCard = React.memo(function ItemCard({
           </View>
 
           <Text
-            style={[styles.title, instance.completed && styles.titleCompleted]}
+            style={[
+              styles.title,
+              instance.completed && styles.titleCompleted,
+              isOverdue && !instance.completed && styles.titleOverdue,
+            ]}
             numberOfLines={expanded ? undefined : 2}
           >
             {item.title}
@@ -298,6 +303,9 @@ const styles = StyleSheet.create({
   titleCompleted: {
     textDecorationLine: 'line-through',
     color: colors.textMuted,
+  },
+  titleOverdue: {
+    color: colors.error,
   },
   tagsBlock: {
     marginTop: spacing.md,

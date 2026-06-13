@@ -19,14 +19,17 @@
       "buildNumber": "4",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSUserNotificationsUsageDescription": "LyVee sends reminders for tasks, activities, and document expirations."
+        "NSUserNotificationsUsageDescription": "LyVee sends reminders for tasks, activities, and document expirations.",
+        "NSLocationWhenInUseUsageDescription": "LyVee uses your location to suggest nearby places when you search for destinations and addresses."
       }
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
       "versionCode": 4,
       "permissions": [
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#7A6FD8",
@@ -59,7 +62,13 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "LyVee uses your location to suggest nearby places when you search for destinations and addresses."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

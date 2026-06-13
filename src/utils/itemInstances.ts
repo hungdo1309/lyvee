@@ -32,6 +32,12 @@ export interface ItemInstance {
   item: Item;
 }
 
+export interface CalendarInstanceFilterOptions {
+  includeExpired?: boolean;
+  /** Keep completed instances visible when includeExpired is false (Home-style). */
+  alwaysIncludeCompleted?: boolean;
+}
+
 function isOccurrenceCompleted(item: Item, occurrenceKey: string): boolean {
   if (item.recurringRule.frequency === 'none') {
     return item.completed;
@@ -93,14 +99,14 @@ export function expandItems(
 export function getInstancesForDate(
   items: Item[],
   date: Date,
-  options: { includeExpired?: boolean } = {}
+  options: CalendarInstanceFilterOptions = {}
 ): ItemInstance[] {
-  const { includeExpired = true } = options;
+  const { includeExpired = true, alwaysIncludeCompleted = false } = options;
   const dayStart = startOfDay(date);
   const dayEnd = addDays(dayStart, 1);
   return filterCalendarInstancesByStatus(
     expandItems(items, dayStart, new Date(dayEnd.getTime() - 1)),
-    includeExpired
+    { includeExpired, alwaysIncludeCompleted }
   );
 }
 
@@ -272,7 +278,7 @@ export function groupUpcomingInstancesByDate(
     }));
 }
 
-function sortItemListInstances(instances: ItemInstance[]): ItemInstance[] {
+export function sortItemListInstances(instances: ItemInstance[]): ItemInstance[] {
   return [...instances].sort((a, b) => {
     if (!a.occurrenceDate && !b.occurrenceDate) {
       return a.item.title.localeCompare(b.item.title);
@@ -280,6 +286,17 @@ function sortItemListInstances(instances: ItemInstance[]): ItemInstance[] {
     if (!a.occurrenceDate) return 1;
     if (!b.occurrenceDate) return -1;
     return a.occurrenceDate.localeCompare(b.occurrenceDate);
+  });
+}
+
+export function sortItemListInstancesLatestFirst(instances: ItemInstance[]): ItemInstance[] {
+  return [...instances].sort((a, b) => {
+    if (!a.occurrenceDate && !b.occurrenceDate) {
+      return b.item.title.localeCompare(a.item.title);
+    }
+    if (!a.occurrenceDate) return 1;
+    if (!b.occurrenceDate) return -1;
+    return b.occurrenceDate.localeCompare(a.occurrenceDate);
   });
 }
 
@@ -453,26 +470,64 @@ export interface MonthInstanceCounts {
 export function isCalendarInstanceActive(instance: ItemInstance): boolean {
   if (instance.completed) return false;
   if (!instance.occurrenceDate) return true;
-  return !isBefore(parseISO(instance.occurrenceDate), startOfDay(new Date()));
+  return !isBefore(parseISO(instance.occurrenceDate), new Date());
+}
+
+/** Incomplete instance whose scheduled date-time has already passed. */
+export function isOverdueCalendarInstance(instance: ItemInstance): boolean {
+  if (instance.completed) return false;
+  if (!instance.occurrenceDate) return false;
+  return isBefore(parseISO(instance.occurrenceDate), new Date());
+}
+
+export function hasOverdueInstances(instances: ItemInstance[]): boolean {
+  return instances.some(isOverdueCalendarInstance);
+}
+
+/** Match overdue push lookback — avoids unbounded recurring missed occurrences. */
+export const HOME_OVERDUE_LOOKBACK_DAYS = 30;
+
+export function getOverdueTaskInstances(
+  items: Item[],
+  lookbackDays: number = HOME_OVERDUE_LOOKBACK_DAYS
+): ItemInstance[] {
+  const now = new Date();
+  const rangeStart = addDays(startOfDay(now), -lookbackDays);
+
+  const instances = expandItems(
+    items.filter((item) => item.type === 'task' && item.dateTime),
+    rangeStart,
+    now
+  );
+
+  return sortItemListInstancesLatestFirst(instances.filter(isOverdueCalendarInstance));
 }
 
 export function filterCalendarInstancesByStatus(
   instances: ItemInstance[],
-  includeExpired: boolean
+  options: CalendarInstanceFilterOptions | boolean = {}
 ): ItemInstance[] {
+  const { includeExpired = true, alwaysIncludeCompleted = false } =
+    typeof options === 'boolean' ? { includeExpired: options } : options;
+
   if (includeExpired) return instances;
+  if (alwaysIncludeCompleted) {
+    return instances.filter(
+      (instance) => instance.completed || isCalendarInstanceActive(instance)
+    );
+  }
   return instances.filter((instance) => isCalendarInstanceActive(instance));
 }
 
 export function getMonthInstanceCounts(
   items: Item[],
   month: Date,
-  options: { includeExpired?: boolean } = {}
+  options: CalendarInstanceFilterOptions = {}
 ): MonthInstanceCounts {
-  const { includeExpired = true } = options;
+  const { includeExpired = true, alwaysIncludeCompleted = false } = options;
   const instances = filterCalendarInstancesByStatus(
     expandItems(items, startOfMonth(month), endOfMonth(month)),
-    includeExpired
+    { includeExpired, alwaysIncludeCompleted }
   );
   let active = 0;
   let expired = 0;
@@ -525,28 +580,37 @@ export function getNextInstance(item: Item): ItemInstance | null {
   return buildInstance(item, upcoming[0]);
 }
 
+export interface CalendarMarkedDate {
+  marked: boolean;
+  dots?: { color: string }[];
+  overdue?: boolean;
+}
+
 export function getMarkedDatesFromItems(
   items: Item[],
   month: Date,
-  options: { includeExpired?: boolean } = {}
-): Record<string, { marked: boolean; dots?: { color: string }[] }> {
-  const { includeExpired = true } = options;
+  options: CalendarInstanceFilterOptions = {}
+): Record<string, CalendarMarkedDate> {
+  const { includeExpired = true, alwaysIncludeCompleted = false } = options;
   const rangeStart = startOfMonth(month);
   const rangeEnd = endOfMonth(month);
   const instances = filterCalendarInstancesByStatus(
     expandItems(items, rangeStart, rangeEnd),
-    includeExpired
+    { includeExpired, alwaysIncludeCompleted }
   );
-  const marked: Record<string, { marked: boolean; dots?: { color: string }[] }> = {};
+  const marked: Record<string, CalendarMarkedDate> = {};
 
   for (const instance of instances) {
     const key = format(parseISO(instance.occurrenceDate), 'yyyy-MM-dd');
     if (!marked[key]) {
-      marked[key] = { marked: true, dots: [] };
+      marked[key] = { marked: true, dots: [], overdue: false };
     }
     const color = itemTypeConfig[instance.item.type].color;
     if ((marked[key].dots?.length ?? 0) < 3) {
       marked[key].dots!.push({ color });
+    }
+    if (isOverdueCalendarInstance(instance)) {
+      marked[key].overdue = true;
     }
   }
 

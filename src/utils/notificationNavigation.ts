@@ -15,6 +15,28 @@ export function navigateFromNotificationData(data: PushNotificationData): void {
     return;
   }
 
+  if (data.type === 'expense.group.deleted' && data.tripId) {
+    router.push(`/(app)/trip/${data.tripId}` as Href);
+    return;
+  }
+
+  if (data.expenseGroupId) {
+    router.push(`/(app)/expense/${data.expenseGroupId}` as Href);
+    return;
+  }
+
+  if (data.tripId) {
+    router.push({
+      pathname: '/(app)/trip/[id]',
+      params: {
+        id: data.tripId,
+        ...(data.dateKey ? { date: data.dateKey } : {}),
+        ...(data.entryId ? { entryId: data.entryId } : {}),
+      },
+    });
+    return;
+  }
+
   if (data.itemId) {
     router.push({
       pathname: '/(app)/item/[id]',
@@ -27,7 +49,7 @@ export function navigateFromNotificationData(data: PushNotificationData): void {
     return;
   }
 
-  if (data.groupId && data.type.startsWith('group.')) {
+  if (data.groupId && data.type?.startsWith('group.')) {
     router.push({
       pathname: '/(app)/(tabs)/groups/[id]',
       params: { id: data.groupId },

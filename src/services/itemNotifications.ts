@@ -1,10 +1,12 @@
 import { Item, ItemInput } from '../types';
+import { APP_NAME } from '../constants/app';
 import { enqueuePushEvent } from './pushNotifications';
 import { fetchGroupMemberIds } from './groupMemberIds';
 import {
   excludeActor,
   getItemAssigneesAndCreator,
   getItemVisibleRecipients,
+  getTaskOverdueRecipients,
   itemHasMeaningfulChanges,
 } from '../utils/pushRecipients';
 import { getUserProfile } from './auth';
@@ -117,6 +119,31 @@ export async function notifyItemCompleted(
       groupId: item.groupId,
       itemId: item.id,
       occurrence: occurrenceDate ?? '',
+    },
+  });
+}
+
+export async function notifyTaskOverdue(
+  item: Item,
+  occurrenceDate: string,
+  actorId: string
+): Promise<void> {
+  const recipientIds = getTaskOverdueRecipients(item);
+  if (recipientIds.length === 0) return;
+
+  await enqueuePushEvent({
+    type: 'item.overdue',
+    actorId,
+    actorName: APP_NAME,
+    recipientIds,
+    includeActor: true,
+    title: 'Task overdue',
+    body: `Task overdue: "${item.title}".`,
+    data: {
+      type: 'item.overdue',
+      groupId: item.groupId,
+      itemId: item.id,
+      occurrence: occurrenceDate,
     },
   });
 }

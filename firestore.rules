@@ -171,6 +171,57 @@ service cloud.firestore {
       return isAuthenticated() && canReadItemById(itemId);
     }
 
+    function canAccessTrip(groupId, data) {
+      return isGroupMember(groupId)
+        && (
+          isGroupManager(groupId)
+          || data.createdBy == request.auth.uid
+          || !('memberIds' in data)
+          || data.get('memberIds', []).size() == 0
+          || request.auth.uid in data.get('memberIds', [])
+        );
+    }
+
+    function canManageTripExpenseGroupById(groupId, tripId) {
+      let trip = get(/databases/$(database)/documents/trips/$(tripId)).data;
+      return trip.groupId == groupId
+        && (
+          trip.createdBy == request.auth.uid
+          || isGroupManager(groupId)
+        );
+    }
+
+    function isUpdatingTripExpenseGroupLink(tripId) {
+      let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      return isGroupMember(resource.data.groupId)
+        && canManageTripExpenseGroupById(resource.data.groupId, tripId)
+        && request.resource.data.updatedAt is string
+        && changedKeys.hasOnly(['expenseGroupId', 'updatedAt'])
+        && (
+          (
+            request.resource.data.expenseGroupId is string
+            && request.resource.data.expenseGroupId
+              != resource.data.get('expenseGroupId', '')
+          )
+          || (
+            !('expenseGroupId' in request.resource.data)
+            && 'expenseGroupId' in resource.data
+          )
+        );
+    }
+
+    function tripMemberIdsValid(memberIds) {
+      return memberIds is list
+        && memberIds.size() > 0
+        && memberIds.size() <= 50;
+    }
+
+    function tripMemberIdsValidForWrite(data) {
+      return !('memberIds' in data)
+        || data.get('memberIds', []).size() == 0
+        || tripMemberIdsValid(data.memberIds);
+    }
+
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isOwner(userId);
@@ -294,6 +345,261 @@ service cloud.firestore {
       }
     }
 
+    match /trips/{tripId} {
+      allow read: if isAuthenticated()
+        && canAccessTrip(resource.data.groupId, resource.data);
+      allow create: if isAuthenticated()
+        && isGroupMember(request.resource.data.groupId)
+        && request.resource.data.createdBy == request.auth.uid
+        && tripMemberIdsValid(request.resource.data.memberIds)
+        && request.auth.uid in request.resource.data.memberIds
+        && request.resource.data.destination is string
+        && request.resource.data.destination.size() >= 2
+        && request.resource.data.destination.size() <= 120
+        && request.resource.data.startDate is string
+        && request.resource.data.endDate is string
+        && request.resource.data.days is list
+        && request.resource.data.createdAt is string
+        && request.resource.data.updatedAt is string
+        && (
+          !('placeId' in request.resource.data)
+          || request.resource.data.placeId is string
+        )
+        && (
+          !('destinationSource' in request.resource.data)
+          || request.resource.data.destinationSource in ['search', 'manual']
+        )
+        && (
+          !('expenseGroupId' in request.resource.data)
+          || request.resource.data.expenseGroupId is string
+        );
+      allow update: if isAuthenticated() && (
+        (
+          canAccessTrip(resource.data.groupId, resource.data)
+          && request.resource.data.groupId == resource.data.groupId
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt
+          && tripMemberIdsValidForWrite(request.resource.data)
+          && (
+            !('memberIds' in request.resource.data)
+            || request.resource.data.get('memberIds', []).size() == 0
+            || request.resource.data.createdBy in request.resource.data.memberIds
+          )
+          && request.resource.data.destination is string
+          && request.resource.data.destination.size() >= 2
+          && request.resource.data.destination.size() <= 120
+          && request.resource.data.startDate is string
+          && request.resource.data.endDate is string
+          && request.resource.data.days is list
+          && request.resource.data.updatedAt is string
+          && (
+            !('destinationDetail' in request.resource.data)
+            || request.resource.data.destinationDetail is string
+          )
+          && (
+            !('placeId' in request.resource.data)
+            || request.resource.data.placeId is string
+          )
+          && (
+            !('destinationSource' in request.resource.data)
+            || request.resource.data.destinationSource in ['search', 'manual']
+          )
+          && (
+            !('expenseGroupId' in request.resource.data)
+            || request.resource.data.expenseGroupId is string
+          )
+        )
+        || isUpdatingTripExpenseGroupLink(tripId)
+      );
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid
+        || isGroupManager(resource.data.groupId)
+      );
+    }
+
+    function expenseGroupMemberIdsValid(memberIds) {
+      return memberIds is list
+        && memberIds.size() > 0
+        && memberIds.size() <= 50;
+    }
+
+    function isTripMemberForExpense(tripId) {
+      let trip = get(/databases/$(database)/documents/trips/$(tripId)).data;
+      return trip.groupId is string
+        && isGroupMember(trip.groupId)
+        && (
+          isGroupManager(trip.groupId)
+          || trip.createdBy == request.auth.uid
+          || !('memberIds' in trip)
+          || trip.get('memberIds', []).size() == 0
+          || request.auth.uid in trip.get('memberIds', [])
+        );
+    }
+
+    function canReadExpenseGroup(groupId, data) {
+      return isGroupMember(groupId) && (
+        data.get('isDefault', false) == true
+          && request.auth.uid in data.memberIds
+        || (
+          !('tripId' in data) || data.tripId == ''
+        ) && !data.get('isDefault', false)
+          && (
+            isGroupManager(groupId)
+            || request.auth.uid in data.memberIds
+          )
+        || ('tripId' in data) && data.tripId is string
+          && (
+            isTripMemberForExpense(data.tripId)
+            || request.auth.uid in data.memberIds
+          )
+      );
+    }
+
+    match /expenseGroups/{expenseGroupId} {
+      allow read: if isAuthenticated()
+        && canReadExpenseGroup(resource.data.groupId, resource.data);
+      allow create: if isAuthenticated()
+        && isGroupMember(request.resource.data.groupId)
+        && request.resource.data.createdBy == request.auth.uid
+        && expenseGroupMemberIdsValid(request.resource.data.memberIds)
+        && request.auth.uid in request.resource.data.memberIds
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.currency is string
+        && request.resource.data.createdAt is string
+        && request.resource.data.updatedAt is string
+        && (
+          !('tripId' in request.resource.data)
+          || (
+            request.resource.data.tripId is string
+            && canManageTripExpenseGroupById(
+              request.resource.data.groupId,
+              request.resource.data.tripId
+            )
+          )
+        )
+        && (
+          !('isDefault' in request.resource.data)
+          || request.resource.data.isDefault is bool
+        )
+        && (
+          !request.resource.data.get('isDefault', false)
+          || !('tripId' in request.resource.data)
+        );
+      allow update: if isAuthenticated()
+        && (
+          canReadExpenseGroup(resource.data.groupId, resource.data)
+          || (
+            ('tripId' in resource.data) && resource.data.tripId is string
+            && canManageTripExpenseGroupById(
+              resource.data.groupId,
+              resource.data.tripId
+            )
+          )
+        )
+        && request.resource.data.groupId == resource.data.groupId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.get('isDefault', false)
+          == resource.data.get('isDefault', false)
+        && expenseGroupMemberIdsValid(request.resource.data.memberIds)
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.updatedAt is string
+        && (
+          !('tripId' in request.resource.data)
+          || request.resource.data.tripId == resource.data.tripId
+        );
+      allow delete: if isAuthenticated()
+        && !resource.data.get('isDefault', false)
+        && (
+          (
+            !('tripId' in resource.data) || resource.data.tripId == ''
+          ) && (
+            resource.data.createdBy == request.auth.uid
+            || isGroupManager(resource.data.groupId)
+          )
+          || ('tripId' in resource.data) && resource.data.tripId is string
+            && canManageTripExpenseGroupById(
+              resource.data.groupId,
+              resource.data.tripId
+            )
+        );
+
+      match /expenses/{expenseId} {
+        allow read: if isAuthenticated()
+          && canReadExpenseGroup(
+            get(/databases/$(database)/documents/expenseGroups/$(expenseGroupId)).data.groupId,
+            get(/databases/$(database)/documents/expenseGroups/$(expenseGroupId)).data
+          );
+        allow create: if isAuthenticated()
+          && canReadExpenseGroup(
+            get(/databases/$(database)/documents/expenseGroups/$(expenseGroupId)).data.groupId,
+            get(/databases/$(database)/documents/expenseGroups/$(expenseGroupId)).data
+          )
+          && request.resource.data.description is string
+          && request.resource.data.description.size() > 0
+          && request.resource.data.description.size() <= 120
+          && request.resource.data.amountCents is int
+          && request.resource.data.amountCents > 0
+          && request.resource.data.paidByUserId is string
+          && request.resource.data.paidByUserId in get(/databases/$(database)/documents/expenseGroups/$(expenseGroupId)).data.memberIds
+          && request.resource.data.splitAmongUserIds is list
+          && request.resource.data.expenseDate is string
+          && (
+            !('splitMode' in request.resource.data)
+            || request.resource.data.splitMode in ['equal', 'exact', 'percentage', 'shares']
+          )
+          && (
+            !('splitValues' in request.resource.data)
+            || request.resource.data.splitValues is map
+          )
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt is string
+          && request.resource.data.updatedAt is string;
+        allow update, delete: if isAuthenticated()
+          && canReadExpenseGroup(
+            get(/databases/$(database)/documents/expenseGroups/$(expenseGroupId)).data.groupId,
+            get(/databases/$(database)/documents/expenseGroups/$(expenseGroupId)).data
+          );
+      }
+
+      match /settlements/{settlementId} {
+        allow read: if isAuthenticated()
+          && canReadExpenseGroup(
+            get(/databases/$(database)/documents/expenseGroups/$(expenseGroupId)).data.groupId,
+            get(/databases/$(database)/documents/expenseGroups/$(expenseGroupId)).data
+          );
+        allow create: if isAuthenticated()
+          && canReadExpenseGroup(
+            get(/databases/$(database)/documents/expenseGroups/$(expenseGroupId)).data.groupId,
+            get(/databases/$(database)/documents/expenseGroups/$(expenseGroupId)).data
+          )
+          && request.resource.data.amountCents is int
+          && request.resource.data.amountCents > 0
+          && request.resource.data.fromUserId is string
+          && request.resource.data.fromUserId in get(/databases/$(database)/documents/expenseGroups/$(expenseGroupId)).data.memberIds
+          && request.resource.data.toUserId is string
+          && request.resource.data.toUserId in get(/databases/$(database)/documents/expenseGroups/$(expenseGroupId)).data.memberIds
+          && request.resource.data.fromUserId != request.resource.data.toUserId
+          && request.resource.data.settlementDate is string
+          && (
+            !('expenseId' in request.resource.data)
+            || request.resource.data.expenseId is string
+          )
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt is string
+          && request.resource.data.updatedAt is string;
+        allow update, delete: if isAuthenticated()
+          && canReadExpenseGroup(
+            get(/databases/$(database)/documents/expenseGroups/$(expenseGroupId)).data.groupId,
+            get(/databases/$(database)/documents/expenseGroups/$(expenseGroupId)).data
+          );
+      }
+    }
+
     match /feedback/{feedbackId} {
       allow read: if false;
       allow create: if isAuthenticated()
@@ -319,6 +625,18 @@ service cloud.firestore {
         && request.resource.data.body is string
         && request.resource.data.status == 'pending';
       allow read, update, delete: if false;
+    }
+
+    match /overdueNotificationLocks/{lockId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated()
+        && !exists(/databases/$(database)/documents/overdueNotificationLocks/$(lockId))
+        && request.resource.data.itemId is string
+        && request.resource.data.occurrence is string
+        && request.resource.data.groupId is string
+        && request.resource.data.claimedBy == request.auth.uid
+        && isGroupMember(request.resource.data.groupId);
+      allow update, delete: if false;
     }
   }
 }

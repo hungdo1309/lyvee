@@ -7,8 +7,11 @@ import { createActivityNotificationsForRecipients } from './activityNotification
 import { getUserProfile, getUsersByIds } from './auth';
 
 export async function enqueuePushEvent(input: PushEventInput): Promise<void> {
-  const recipientIds = excludeActor(input.actorId, input.recipientIds);
-  if (recipientIds.length === 0) return;
+  const recipientIds = input.includeActor
+    ? input.recipientIds.filter(Boolean)
+    : excludeActor(input.actorId, input.recipientIds);
+  const uniqueRecipientIds = [...new Set(recipientIds)];
+  if (uniqueRecipientIds.length === 0) return;
 
   try {
     const actorName =
@@ -18,7 +21,7 @@ export async function enqueuePushEvent(input: PushEventInput): Promise<void> {
     const data = input.data ?? { type: input.type };
 
     const notificationIds = await createActivityNotificationsForRecipients({
-      recipientIds,
+      recipientIds: uniqueRecipientIds,
       actorId: input.actorId,
       actorName,
       type: input.type,
@@ -27,11 +30,11 @@ export async function enqueuePushEvent(input: PushEventInput): Promise<void> {
       data,
     });
 
-    const recipients = await getUsersByIds(recipientIds);
+    const recipients = await getUsersByIds(uniqueRecipientIds);
     const recipientsById = new Map(recipients.map((recipient) => [recipient.id, recipient]));
 
     await Promise.all(
-      recipientIds.map(async (recipientId) => {
+      uniqueRecipientIds.map(async (recipientId) => {
         const recipient = recipientsById.get(recipientId);
         const pushTokens = recipient ? collectPushTokensFromUsers([recipient]) : [];
         if (pushTokens.length === 0) return;

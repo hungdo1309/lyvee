@@ -73,6 +73,14 @@ export function GroupPicker({
     setOpen(true);
   };
 
+  const toggleDropdown = () => {
+    if (open) {
+      closeDropdown();
+    } else {
+      handleOpen();
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
@@ -81,30 +89,23 @@ export function GroupPicker({
       </View>
 
       {canChange ? (
-        <View style={[styles.field, open && styles.fieldOpen]}>
+        <TouchableOpacity
+          style={[styles.field, open && styles.fieldOpen]}
+          onPress={toggleDropdown}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={open ? 'Close group list' : 'Show group list'}
+          accessibilityState={{ expanded: open }}
+        >
           <Text style={styles.fieldValue} numberOfLines={1}>
             {selectedGroup.name}
           </Text>
-          <TouchableOpacity
-            onPress={() => {
-              if (open) {
-                closeDropdown();
-              } else {
-                handleOpen();
-              }
-            }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityRole="button"
-            accessibilityLabel={open ? 'Close group list' : 'Show group list'}
-            accessibilityState={{ expanded: open }}
-          >
-            <Ionicons
-              name={open ? 'chevron-up' : 'chevron-down'}
-              size={18}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
-        </View>
+          <Ionicons
+            name={open ? 'chevron-up' : 'chevron-down'}
+            size={18}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
       ) : (
         <View style={styles.field}>
           <Text style={styles.fieldValue} numberOfLines={1}>

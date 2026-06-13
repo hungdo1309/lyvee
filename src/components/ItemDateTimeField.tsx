@@ -21,8 +21,12 @@ interface ItemDateTimeFieldProps {
   value: Date;
   onChange: (date: Date) => void;
   dateOnly?: boolean;
+  fieldLabel?: string;
   sheetTitle?: string;
   readOnly?: boolean;
+  error?: boolean;
+  minDate?: string;
+  maxDate?: string;
 }
 
 type PickerMode = 'date' | 'time';
@@ -49,8 +53,12 @@ export function ItemDateTimeField({
   value,
   onChange,
   dateOnly = false,
+  fieldLabel,
   sheetTitle = 'Date & Time',
   readOnly = false,
+  error = false,
+  minDate,
+  maxDate,
 }: ItemDateTimeFieldProps) {
   const insets = useSafeAreaInsets();
   const [visible, setVisible] = useState(false);
@@ -99,8 +107,9 @@ export function ItemDateTimeField({
 
   return (
     <>
+      {fieldLabel ? <Text style={styles.fieldLabel}>{fieldLabel}</Text> : null}
       <TouchableOpacity
-        style={styles.field}
+        style={[styles.field, error && styles.fieldError]}
         onPress={() => {
           if (!readOnly) setVisible(true);
         }}
@@ -113,8 +122,8 @@ export function ItemDateTimeField({
           <Ionicons name="calendar-outline" size={20} color={colors.primary} />
         </View>
         <View style={styles.copy}>
-          <Text style={styles.weekdayLine}>{format(value, 'EEEE')}</Text>
           <Text style={styles.dateLine}>{format(value, 'MMMM d, yyyy')}</Text>
+          <Text style={styles.weekdayLine}>{format(value, 'EEEE')}</Text>
           {!dateOnly ? (
             <Text style={styles.timeLine}>{format(value, 'h:mm a')}</Text>
           ) : null}
@@ -129,6 +138,7 @@ export function ItemDateTimeField({
         visible={visible}
         transparent
         animationType="slide"
+        presentationStyle="overFullScreen"
         onRequestClose={() => setVisible(false)}
         statusBarTranslucent={Platform.OS === 'android'}
       >
@@ -206,6 +216,8 @@ export function ItemDateTimeField({
                   key={calendarMonth}
                   current={calendarMonth}
                   onDayPress={handleDayPress}
+                  minDate={minDate}
+                  maxDate={maxDate}
                   markedDates={{
                     [draftKey]: {
                       selected: true,
@@ -260,6 +272,12 @@ export function ItemDateTimeField({
 }
 
 const styles = StyleSheet.create({
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
   field: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -270,6 +288,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
+  },
+  fieldError: {
+    borderColor: colors.error,
+    backgroundColor: '#FEF2F2',
   },
   iconWrap: {
     width: 40,

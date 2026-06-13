@@ -145,6 +145,7 @@ export function ItemFormOptions({
   readOnly = false,
 }: ItemFormOptionsProps) {
   const intervalInputRef = useRef<TextInput>(null);
+  const intervalMeasureRef = useRef<View>(null);
   const scrollToFocus = useKeyboardFocusScroll();
   const isCustomSelected = recurringRule.frequency === 'custom';
   const showRecurring = itemTypeSupportsRecurring(type);
@@ -238,7 +239,7 @@ export function ItemFormOptions({
           </ScrollView>
 
           {isCustomSelected && (
-            <View style={styles.customSection}>
+            <View ref={intervalMeasureRef} collapsable={false} style={styles.customSection}>
               <View style={styles.customIntervalRow}>
                 <Text style={styles.customLabel}>Every</Text>
                 <TextInput
@@ -253,7 +254,7 @@ export function ItemFormOptions({
                     })
                   }
                   onFocus={() =>
-                    scrollFocusedInputIntoView(scrollToFocus, intervalInputRef.current)
+                    scrollFocusedInputIntoView(scrollToFocus, intervalMeasureRef.current)
                   }
                   keyboardType="number-pad"
                   maxLength={3}

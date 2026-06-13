@@ -24,7 +24,7 @@ export default function OnboardingSharingScreen() {
       title={ONBOARDING_SHARING_TITLE}
       subtitle={ONBOARDING_SHARING_SUBTITLE}
       onContinue={() =>
-        router.push(buildOnboardingHref('/(app)/onboarding/reminders', groupId))
+        router.push(buildOnboardingHref('/(app)/onboarding/trips-expenses', groupId))
       }
       tourSkip
       groupId={groupId}

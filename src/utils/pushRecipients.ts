@@ -31,6 +31,11 @@ export function getItemAssigneesAndCreator(item: Item, actorId: string): string[
   return excludeActor(actorId, uniqueIds([item.createdBy, ...item.assignedTo]));
 }
 
+/** Owner and assignees, deduplicated (owner who is also assigned receives one notification). */
+export function getTaskOverdueRecipients(item: Item): string[] {
+  return uniqueIds([item.createdBy, ...item.assignedTo]);
+}
+
 export function getItemVisibleRecipients(
   item: Item,
   groupMemberIds: string[],
