@@ -304,8 +304,6 @@ export function TripEntryEditor({
                     dateOnly
                     fieldLabel="Date"
                     sheetTitle="Plan date"
-                    minDate={tripStartDate}
-                    maxDate={tripEndDate}
                   />
                 </View>
                 <TripTimeRangeField

@@ -70,8 +70,7 @@ export default function CalendarScreen() {
     await toggleItemComplete(
       instance.item,
       instance.isRecurring ? instance.occurrenceDate : undefined,
-      user?.id,
-      activeGroup?.members
+      user?.id
     );
   };
 

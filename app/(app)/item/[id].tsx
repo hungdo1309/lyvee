@@ -140,8 +140,7 @@ export default function ItemDetailScreen() {
       await toggleItemComplete(
         item,
         item.recurringRule.frequency !== 'none' ? viewingOccurrence : undefined,
-        user?.id,
-        itemGroup?.members
+        user?.id
       );
     } catch (error: unknown) {
       appAlert(

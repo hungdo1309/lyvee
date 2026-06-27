@@ -2,11 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Trip } from '../types/trips';
-import { TripDateRangeField } from './TripDateRangeField';
+import { DateRangePickerField } from './DateRangePickerField';
 import { Button } from './Button';
 import { CancelButton } from './CancelButton';
 import { ModalBottomSheet, modalBottomSheetStyles } from './ModalBottomSheet';
 import { colors, spacing, typography } from '../constants/theme';
+import { formatTripDayCountLabel, getTripDateRangeError } from '../utils/trips';
 
 interface TripDatesEditorProps {
   visible: boolean;
@@ -61,12 +62,15 @@ export function TripDatesEditor({ visible, trip, onClose, onSave }: TripDatesEdi
         stay blocks that fall outside the new range.
       </Text>
 
-      <TripDateRangeField
+      <DateRangePickerField
         startDate={startDate}
         endDate={endDate}
         onStartDateChange={setStartDate}
         onEndDateChange={setEndDate}
         label="Travel dates"
+        sheetTitle="Travel dates"
+        getRangeError={getTripDateRangeError}
+        formatDayCountLabel={formatTripDayCountLabel}
       />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}

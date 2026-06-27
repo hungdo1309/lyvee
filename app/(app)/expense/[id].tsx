@@ -249,7 +249,7 @@ export default function ExpenseGroupDetailScreen() {
         )
       : false;
 
-  const handleSettleExpense = async () => {
+  const handleSettleExpense = async (amountCents: number) => {
     if (
       !expenseGroup ||
       !user ||
@@ -266,7 +266,7 @@ export default function ExpenseGroupDetailScreen() {
         expenseId: editingExpense.id,
         fromUserId: user.id,
         toUserId: editingExpense.paidByUserId,
-        amountCents: viewingExpenseRemainingCents,
+        amountCents,
         settlementDate: format(startOfDay(new Date()), 'yyyy-MM-dd'),
       },
       user.id

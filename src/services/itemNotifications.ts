@@ -1,28 +1,13 @@
 import { Item, ItemInput } from '../types';
 import { APP_NAME } from '../constants/app';
 import { enqueuePushEvent } from './pushNotifications';
-import { fetchGroupMemberIds } from './groupMemberIds';
 import {
   excludeActor,
   getItemAssigneesAndCreator,
-  getItemVisibleRecipients,
   getTaskOverdueRecipients,
   itemHasMeaningfulChanges,
 } from '../utils/pushRecipients';
 import { getUserProfile } from './auth';
-
-async function resolveGroupMemberIds(
-  item: Item,
-  groupMemberIds?: string[]
-): Promise<string[]> {
-  if (groupMemberIds && groupMemberIds.length > 0) {
-    return groupMemberIds;
-  }
-  if (item.visibleTo && item.visibleTo.length > 0) {
-    return item.visibleTo;
-  }
-  return fetchGroupMemberIds(item.groupId);
-}
 
 async function actorName(actorId: string): Promise<string> {
   const profile = await getUserProfile(actorId);
@@ -99,11 +84,9 @@ export async function notifyItemDeleted(item: Item, actorId: string): Promise<vo
 export async function notifyItemCompleted(
   item: Item,
   actorId: string,
-  occurrenceDate?: string,
-  groupMemberIds?: string[]
+  occurrenceDate?: string
 ): Promise<void> {
-  const members = await resolveGroupMemberIds(item, groupMemberIds);
-  const recipientIds = getItemVisibleRecipients(item, members, actorId);
+  const recipientIds = getItemAssigneesAndCreator(item, actorId);
   if (recipientIds.length === 0) return;
 
   const name = await actorName(actorId);

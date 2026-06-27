@@ -5,7 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, type Href } from 'expo-router';
 import { Card } from './Card';
 import { Button } from './Button';
-import { InlineConfirmPanel } from './InlineConfirmPanel';
+import { SettleConfirmPanel } from './SettleConfirmPanel';
 import { ExpensesIcon } from './ExpensesIcon';
 import { addSettlement } from '../services/expenseGroups';
 import { formatExpenseMoney } from '../utils/expenseMoney';
@@ -24,7 +24,7 @@ interface HomeUnsettledExpensesSectionProps {
   memberNameById: Map<string, string>;
   viewerUserId: string;
   isManager: boolean;
-  onSettled?: () => void;
+  onSettled?: (expenseGroupId: string) => void;
 }
 
 function entryKey(entry: HomeSettleExpenseEntry) {
@@ -50,7 +50,7 @@ export function HomeUnsettledExpensesSection({
 
   if (entries.length === 0) return null;
 
-  const confirmSettle = async () => {
+  const confirmSettle = async (amountCents: number) => {
     if (!pendingSettle || !pendingEntry) return;
 
     setSettling(true);
@@ -62,13 +62,13 @@ export function HomeUnsettledExpensesSection({
           expenseId: pendingEntry.expense.id,
           fromUserId: pendingSettle.debtorUserId,
           toUserId: pendingEntry.expense.paidByUserId,
-          amountCents: pendingSettle.remainingCents,
+          amountCents,
           settlementDate: format(startOfDay(new Date()), 'yyyy-MM-dd'),
         },
         viewerUserId
       );
       setPendingSettle(null);
-      onSettled?.();
+      onSettled?.(pendingEntry.expenseGroup.id);
     } catch (error) {
       setSettleError(error instanceof Error ? error.message : 'Failed to record payment');
     } finally {
@@ -183,16 +183,14 @@ export function HomeUnsettledExpensesSection({
                     </Card>
 
                     {isConfirmingThis && pendingSettle && pendingEntry ? (
-                      <InlineConfirmPanel
+                      <SettleConfirmPanel
                         title="Settle up?"
-                        message={`Record that ${
+                        message={`Record a payment from ${
                           memberNameById.get(pendingSettle.debtorUserId) ?? 'Member'
-                        } paid ${payerName} ${formatExpenseMoney(
-                          pendingSettle.remainingCents,
-                          pendingEntry.expenseGroup.currency
-                        )} for "${pendingEntry.expense.description}"?`}
-                        confirmLabel="Yes"
-                        confirmVariant="money"
+                        } to ${payerName} for "${pendingEntry.expense.description}".`}
+                        currency={pendingEntry.expenseGroup.currency}
+                        maxAmountCents={pendingSettle.remainingCents}
+                        confirmLabel="Record payment"
                         elevated
                         loading={settling}
                         error={settleError}

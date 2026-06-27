@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
-  Keyboard,
   Modal,
   Pressable,
   StyleSheet,
   Dimensions,
+  View,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -32,28 +32,43 @@ export function ModalBottomSheet({
   bounces = true,
 }: ModalBottomSheetProps) {
   const insets = useSafeAreaInsets();
-  const scrollMaxHeight = MAX_SHEET_HEIGHT - Math.max(insets.bottom, spacing.md);
+  const scrollMaxHeight = useMemo(
+    () => MAX_SHEET_HEIGHT - Math.max(insets.bottom, spacing.md),
+    [insets.bottom]
+  );
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
+      <View style={styles.overlay}>
         <Pressable
-          style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}
-          onPress={Keyboard.dismiss}
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+        />
+        <View
+          collapsable={false}
+          style={[
+            styles.sheet,
+            { paddingBottom: Math.max(insets.bottom, spacing.md), flexShrink: 1 },
+          ]}
+          accessibilityViewIsModal
         >
-          <KeyboardAwareScrollView
-            fill={false}
-            style={{ height: scrollMaxHeight, maxHeight: scrollMaxHeight }}
-            contentContainerStyle={[styles.scrollContent, contentContainerStyle]}
-            keyboardVerticalOffset={keyboardVerticalOffset}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            bounces={bounces}
-          >
-            {children}
-          </KeyboardAwareScrollView>
-        </Pressable>
-      </Pressable>
+          <View style={{ maxHeight: scrollMaxHeight }}>
+            <KeyboardAwareScrollView
+              fill={false}
+              style={{ maxHeight: scrollMaxHeight }}
+              contentContainerStyle={[styles.scrollContent, contentContainerStyle]}
+              keyboardVerticalOffset={keyboardVerticalOffset}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={bounces}
+            >
+              {children}
+            </KeyboardAwareScrollView>
+          </View>
+        </View>
+      </View>
     </Modal>
   );
 }

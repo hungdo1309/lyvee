@@ -152,8 +152,7 @@ export default function HomeScreen() {
     await toggleItemComplete(
       instance.item,
       instance.isRecurring ? instance.occurrenceDate : undefined,
-      user?.id,
-      activeGroup?.members
+      user?.id
     );
   };
 

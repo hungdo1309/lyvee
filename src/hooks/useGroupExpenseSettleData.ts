@@ -19,7 +19,7 @@ export function useGroupExpenseSettleData(
   expensesByGroupId: Map<string, Expense[]>;
   settlementsByGroupId: Map<string, ExpenseSettlement[]>;
   loading: boolean;
-  refreshExpenseSettleData: () => void;
+  refreshExpenseSettleData: (expenseGroupId?: string) => void;
 } {
   const isFocused = useIsFocused();
   const [expensesByGroupId, setExpensesByGroupId] = useState<Map<string, Expense[]>>(new Map());
@@ -29,7 +29,30 @@ export function useGroupExpenseSettleData(
   const [loadedGroupIds, setLoadedGroupIds] = useState<Set<string>>(new Set());
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const refreshExpenseSettleData = useCallback(() => {
+  const refreshExpenseSettleData = useCallback((expenseGroupId?: string) => {
+    if (expenseGroupId) {
+      void Promise.all([
+        fetchExpenseGroupExpensesOnce(expenseGroupId),
+        fetchExpenseGroupSettlementsOnce(expenseGroupId),
+      ])
+        .then(([expenses, settlements]) => {
+          setExpensesByGroupId((current) => {
+            const next = new Map(current);
+            next.set(expenseGroupId, expenses);
+            return next;
+          });
+          setSettlementsByGroupId((current) => {
+            const next = new Map(current);
+            next.set(expenseGroupId, settlements);
+            return next;
+          });
+        })
+        .catch((error) => {
+          console.warn('[useGroupExpenseSettleData] refresh group:', error);
+        });
+      return;
+    }
+
     setRefreshKey((value) => value + 1);
   }, []);
 
@@ -42,9 +65,10 @@ export function useGroupExpenseSettleData(
   }, [group, userId, expenseGroups, trips]);
 
   const visibleExpenseGroups = useMemo(() => {
-    if (!group || !userId) return [];
-    return filterVisibleExpenseGroups(expenseGroups, group, userId, trips);
-  }, [visibleExpenseGroupIdsKey, group, userId, expenseGroups, trips]);
+    if (!group || !userId || visibleExpenseGroupIdsKey === '') return [];
+    const visibleIds = new Set(visibleExpenseGroupIdsKey.split(','));
+    return expenseGroups.filter((entry) => visibleIds.has(entry.id));
+  }, [visibleExpenseGroupIdsKey, expenseGroups, group, userId]);
 
   useEffect(() => {
     if (!isFocused || visibleExpenseGroupIdsKey === '') {

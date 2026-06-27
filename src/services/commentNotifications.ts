@@ -6,6 +6,7 @@ import {
   getNewMentionRecipients,
 } from '../utils/commentMentions';
 import { PushNotificationType } from '../types/pushNotifications';
+import { uniqueIds } from '../utils/pushRecipients';
 import { enqueuePushEvent } from './pushNotifications';
 
 async function notifyRecipients(
@@ -81,19 +82,32 @@ export async function notifyCommentReply(
   item: Item,
   comment: ItemComment,
   parentComment: ItemComment,
+  rootAuthorId: string | null,
   actorId: string,
-  actorName: string
+  actorName: string,
+  realMentionRecipientIds: string[] = []
 ): Promise<void> {
-  if (parentComment.authorId === actorId) return;
-
   const preview = comment.body.trim().slice(0, 80);
   const body = `${actorName} replied to your comment: ${preview}`;
+
+  const mentionRecipients = new Set(realMentionRecipientIds);
+  const recipientIds = uniqueIds([
+    ...(parentComment.authorId !== actorId ? [parentComment.authorId] : []),
+    ...(rootAuthorId &&
+    rootAuthorId !== actorId &&
+    rootAuthorId !== parentComment.authorId &&
+    !mentionRecipients.has(rootAuthorId)
+      ? [rootAuthorId]
+      : []),
+  ]);
+
+  if (recipientIds.length === 0) return;
 
   await notifyRecipients(
     item,
     actorId,
     actorName,
-    [parentComment.authorId],
+    recipientIds,
     comment,
     body,
     'item.comment.reply'

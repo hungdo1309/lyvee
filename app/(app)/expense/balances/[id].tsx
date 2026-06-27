@@ -11,7 +11,7 @@ import { LoadingScreen } from '../../../../src/components/LoadingScreen';
 import { EmptyState } from '../../../../src/components/EmptyState';
 import { Card } from '../../../../src/components/Card';
 import { Button } from '../../../../src/components/Button';
-import { InlineConfirmPanel } from '../../../../src/components/InlineConfirmPanel';
+import { SettleConfirmPanel } from '../../../../src/components/SettleConfirmPanel';
 import { ExpensesIcon, EXPENSES_EMPTY_ICON_WRAP_SIZE, EXPENSES_ICON_SIZE } from '../../../../src/components/ExpensesIcon';
 import {
   addSettlement,
@@ -113,7 +113,11 @@ export default function ExpenseBalancesScreen() {
         (settlement) =>
           settlement.fromUserId === user.id || settlement.toUserId === user.id
       )
-      .sort((a, b) => b.settlementDate.localeCompare(a.settlementDate));
+      .sort((a, b) => {
+        const dateCompare = b.settlementDate.localeCompare(a.settlementDate);
+        if (dateCompare !== 0) return dateCompare;
+        return b.createdAt.localeCompare(a.createdAt);
+      });
   }, [settlements, user]);
 
   const yourTransfers = useMemo(() => {
@@ -122,6 +126,14 @@ export default function ExpenseBalancesScreen() {
       (transfer) => transfer.fromUserId === user.id || transfer.toUserId === user.id
     );
   }, [transfers, user]);
+
+  const hasUnsettledBalances = yourTransfers.length > 0;
+
+  useEffect(() => {
+    if (hasUnsettledBalances) {
+      setBalancesExpanded(true);
+    }
+  }, [hasUnsettledBalances]);
 
   const transferKey = (transfer: BalanceTransfer) =>
     `${transfer.fromUserId}-${transfer.toUserId}-${transfer.amountCents}`;
@@ -132,7 +144,7 @@ export default function ExpenseBalancesScreen() {
     setPendingSettleTransfer(transfer);
   };
 
-  const confirmSettle = async () => {
+  const confirmSettle = async (amountCents: number) => {
     if (!expenseGroup || !user || !pendingSettleTransfer) return;
 
     const key = transferKey(pendingSettleTransfer);
@@ -144,7 +156,7 @@ export default function ExpenseBalancesScreen() {
         {
           fromUserId: pendingSettleTransfer.fromUserId,
           toUserId: pendingSettleTransfer.toUserId,
-          amountCents: pendingSettleTransfer.amountCents,
+          amountCents,
           settlementDate: format(startOfDay(new Date()), 'yyyy-MM-dd'),
         },
         user.id
@@ -279,21 +291,28 @@ export default function ExpenseBalancesScreen() {
         <View style={styles.section}>
           <TouchableOpacity
             style={styles.sectionHeaderRow}
-            onPress={() => setBalancesExpanded((value) => !value)}
-            activeOpacity={0.85}
+            onPress={() => {
+              if (!hasUnsettledBalances) {
+                setBalancesExpanded((value) => !value);
+              }
+            }}
+            activeOpacity={hasUnsettledBalances ? 1 : 0.85}
             accessibilityRole="button"
-            accessibilityState={{ expanded: balancesExpanded }}
+            accessibilityState={{ expanded: hasUnsettledBalances || balancesExpanded }}
+            disabled={hasUnsettledBalances}
           >
             <Text style={styles.sectionHeading}>
               Balances{yourTransfers.length > 0 ? ` (${yourTransfers.length})` : ''}
             </Text>
-            <Ionicons
-              name={balancesExpanded ? 'chevron-up' : 'chevron-down'}
-              size={18}
-              color={colors.textSecondary}
-            />
+            {hasUnsettledBalances ? null : (
+              <Ionicons
+                name={balancesExpanded ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color={colors.textSecondary}
+              />
+            )}
           </TouchableOpacity>
-          {balancesExpanded ? (
+          {hasUnsettledBalances || balancesExpanded ? (
             yourTransfers.length === 0 ? (
               <Text style={styles.allSettled}>You're settled up</Text>
             ) : (
@@ -325,11 +344,13 @@ export default function ExpenseBalancesScreen() {
                       ) : null}
                     </View>
                     {isConfirming ? (
-                      <InlineConfirmPanel
+                      <SettleConfirmPanel
                         title="Settle up?"
-                        message={`Record that you paid ${toName} ${amountLabel}?`}
-                        confirmLabel="Yes"
-                        confirmVariant="money"
+                        message={`Record a payment to ${toName}.`}
+                        currency={expenseGroup.currency}
+                        maxAmountCents={transfer.amountCents}
+                        partialHint="Partial payments apply to your oldest unsettled expenses first."
+                        confirmLabel="Record payment"
                         elevated
                         loading={isRecording}
                         error={settleError}

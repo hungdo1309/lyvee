@@ -26,11 +26,12 @@ export function getExpenseNotificationRecipients(
   );
 }
 
+/** Notify the payee that a payment was recorded or removed. The payer already knows if they initiated it. */
 export function getSettlementNotificationRecipients(
-  settlement: Pick<ExpenseSettlement, 'fromUserId' | 'toUserId'>,
+  settlement: Pick<ExpenseSettlement, 'toUserId'>,
   actorId: string
 ): string[] {
-  return excludeActor(actorId, [settlement.fromUserId, settlement.toUserId]);
+  return excludeActor(actorId, [settlement.toUserId]);
 }
 
 export function getTripExpenseGroupDeletedRecipients(

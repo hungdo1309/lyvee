@@ -68,7 +68,6 @@ const PLAN_START_MS = 30 * 60 * 1000;
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
     shouldShowBanner: true,

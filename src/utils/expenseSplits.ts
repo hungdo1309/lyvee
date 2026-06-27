@@ -244,6 +244,13 @@ export function compareExpensesLatestFirst(left: Expense, right: Expense): numbe
   return -compareExpensesEarliest(left, right);
 }
 
+/** Sort expenses with the earliest updatedAt first. */
+export function compareExpensesByUpdatedAtEarliest(left: Expense, right: Expense): number {
+  const updatedCompare = left.updatedAt.localeCompare(right.updatedAt);
+  if (updatedCompare !== 0) return updatedCompare;
+  return left.createdAt.localeCompare(right.createdAt);
+}
+
 export function isUserInvolvedInExpense(
   expense: Expense,
   userId: string,
@@ -312,21 +319,49 @@ function applySettlementToSlices(
   }
 }
 
+function applyAllSettlementsToSlices(
+  slices: ExpenseDebtSlice[],
+  settlements: ExpenseSettlementRef[]
+): void {
+  for (const settlement of settlements) {
+    if (settlement.expenseId) {
+      applySettlementToSlices(slices, settlement);
+    }
+  }
+  for (const settlement of settlements) {
+    if (!settlement.expenseId) {
+      applySettlementToSlices(slices, settlement);
+    }
+  }
+}
+
+function buildSettledDebtSlices(
+  expenses: Expense[],
+  groupMemberIds: string[],
+  settlements: ExpenseSettlementRef[]
+): ExpenseDebtSlice[] {
+  const slices = buildExpenseDebtSlices(expenses, groupMemberIds);
+  applyAllSettlementsToSlices(slices, settlements);
+  return slices;
+}
+
+/** Unsettled debtor slices after applying recorded payments (one pass per expense group). */
+export function computeOpenExpenseDebtSlices(
+  expenses: Expense[],
+  groupMemberIds: string[],
+  settlements: ExpenseSettlementRef[]
+): ExpenseDebtSlice[] {
+  return buildSettledDebtSlices(expenses, groupMemberIds, settlements).filter(
+    (slice) => slice.remainingCents > 0
+  );
+}
+
 function computeExpenseDebtRemainingByExpenseId(
   expenses: Expense[],
   groupMemberIds: string[],
   settlements: ExpenseSettlementRef[]
 ): Map<string, number> {
-  const slices = buildExpenseDebtSlices(expenses, groupMemberIds);
-  const linkedSettlements = settlements.filter((settlement) => settlement.expenseId);
-  const unlinkedSettlements = settlements.filter((settlement) => !settlement.expenseId);
-
-  for (const settlement of linkedSettlements) {
-    applySettlementToSlices(slices, settlement);
-  }
-  for (const settlement of unlinkedSettlements) {
-    applySettlementToSlices(slices, settlement);
-  }
+  const slices = buildSettledDebtSlices(expenses, groupMemberIds, settlements);
 
   const remainingByExpenseId = new Map<string, number>();
   for (const expense of expenses) {
@@ -342,7 +377,7 @@ function computeExpenseDebtRemainingByExpenseId(
   return remainingByExpenseId;
 }
 
-/** Split expenses into open vs fully settled lists (earliest first in each). */
+/** Split expenses into open vs fully settled lists (unsettled first, updatedAt ascending in each). */
 export function partitionExpensesBySettlementStatus(
   expenses: Expense[],
   groupMemberIds: string[],
@@ -366,8 +401,8 @@ export function partitionExpensesBySettlementStatus(
     }
   }
 
-  openExpenses.sort(compareExpensesEarliest);
-  settledExpenses.sort(compareExpensesEarliest);
+  openExpenses.sort(compareExpensesByUpdatedAtEarliest);
+  settledExpenses.sort(compareExpensesByUpdatedAtEarliest);
 
   return { openExpenses, settledExpenses };
 }
@@ -408,18 +443,7 @@ export function getUserExpenseShareRemainingCents(
 ): number {
   if (getUserExpenseShareCents(expense, userId, groupMemberIds) == null) return 0;
 
-  const slices = buildExpenseDebtSlices(allExpenses, groupMemberIds);
-  const linkedSettlements = settlements.filter((settlement) => settlement.expenseId);
-  const unlinkedSettlements = settlements.filter((settlement) => !settlement.expenseId);
-
-  for (const settlement of linkedSettlements) {
-    applySettlementToSlices(slices, settlement);
-  }
-  for (const settlement of unlinkedSettlements) {
-    applySettlementToSlices(slices, settlement);
-  }
-
-  const slice = slices.find(
+  const slice = buildSettledDebtSlices(allExpenses, groupMemberIds, settlements).find(
     (entry) => entry.expenseId === expense.id && entry.debtorUserId === userId
   );
   return slice?.remainingCents ?? 0;

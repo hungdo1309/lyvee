@@ -301,8 +301,7 @@ export async function fetchItemsForGroups(
 export async function toggleItemComplete(
   item: Item,
   occurrenceDate?: string,
-  actorId?: string,
-  groupMemberIds?: string[]
+  actorId?: string
 ): Promise<void> {
   if (item.type !== 'task') return;
   if (!canUserCompleteTask(item, actorId)) {
@@ -313,7 +312,7 @@ export async function toggleItemComplete(
     const completed = !item.completed;
     await updateItem(item.id, { completed }, actorId, false, item);
     if (actorId && completed) {
-      await notifyItemCompleted(item, actorId, undefined, groupMemberIds);
+      await notifyItemCompleted(item, actorId);
     }
     return;
   }
@@ -327,7 +326,7 @@ export async function toggleItemComplete(
 
   await updateItem(item.id, { completedOccurrences }, actorId, false, item);
   if (actorId && isCompleting) {
-    await notifyItemCompleted(item, actorId, occurrenceDate, groupMemberIds);
+    await notifyItemCompleted(item, actorId, occurrenceDate);
   }
 }
 

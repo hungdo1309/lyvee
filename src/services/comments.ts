@@ -16,7 +16,10 @@ import {
 import { db } from '../config/firebase';
 import { Item } from '../types';
 import { ItemComment, ItemCommentInput } from '../types/comments';
-import { sanitizeMentionUserIds } from '../utils/commentMentions';
+import {
+  getCommentNotificationRecipients,
+  sanitizeMentionUserIds,
+} from '../utils/commentMentions';
 import { getUserProfile } from './auth';
 import {
   notifyCommentMentions,
@@ -238,6 +241,19 @@ export async function fetchCommentsForFocus(
   return [...collected.values()];
 }
 
+async function resolveThreadRootAuthorId(
+  itemId: string,
+  parentComment: ItemComment,
+  threadRootId: string
+): Promise<string | null> {
+  if (!parentComment.parentCommentId) {
+    return parentComment.authorId;
+  }
+
+  const root = await fetchItemCommentById(itemId, threadRootId);
+  return root?.authorId ?? null;
+}
+
 export async function createItemComment(
   item: Item,
   input: ItemCommentInput,
@@ -274,25 +290,42 @@ export async function createItemComment(
   await setDoc(doc(db, 'items', item.id, 'comments', id), comment);
 
   const actor = await getUserProfile(authorId);
+  const actorName = actor?.name ?? 'Someone';
   const mentionExcludeRecipientIds =
     parentComment && parentComment.authorId !== authorId ? [parentComment.authorId] : [];
+  const mentionExcludeSet = new Set(mentionExcludeRecipientIds);
+  const realMentionRecipientIds = getCommentNotificationRecipients(
+    item,
+    groupMemberIds,
+    comment.mentionUserIds,
+    comment.mentionEveryone,
+    authorId
+  ).filter((recipientId) => !mentionExcludeSet.has(recipientId));
 
   await notifyCommentMentions(
     item,
     comment,
     groupMemberIds,
     authorId,
-    actor?.name ?? 'Someone',
+    actorName,
     mentionExcludeRecipientIds
   );
 
   if (parentComment) {
+    const rootAuthorId = await resolveThreadRootAuthorId(
+      item.id,
+      parentComment,
+      threadRootId
+    );
+
     await notifyCommentReply(
       item,
       comment,
       parentComment,
+      rootAuthorId,
       authorId,
-      actor?.name ?? 'Someone'
+      actorName,
+      realMentionRecipientIds
     );
   }
 

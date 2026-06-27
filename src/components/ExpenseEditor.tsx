@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { format, parseISO } from 'date-fns';
 import { Expense, ExpenseGroup, ExpenseSplitMode, PERCENTAGE_SCALE } from '../types/expenses';
 import { User } from '../types';
@@ -7,6 +8,7 @@ import { Input } from './Input';
 import { Button } from './Button';
 import { ModalBottomSheet, modalBottomSheetStyles } from './ModalBottomSheet';
 import { InlineConfirmPanel } from './InlineConfirmPanel';
+import { SettleConfirmPanel } from './SettleConfirmPanel';
 import { ItemDateTimeField } from './ItemDateTimeField';
 import {
   formatExpenseMoney,
@@ -41,7 +43,7 @@ interface ExpenseEditorProps {
   initialExpense?: Expense | null;
   readOnly?: boolean;
   onEdit?: () => void;
-  onSettle?: () => void | Promise<void>;
+  onSettle?: (amountCents: number) => void | Promise<void>;
   onUnsettle?: () => void | Promise<void>;
   onSettleForMember?: (userId: string, amountCents: number) => void | Promise<void>;
   onUnsettleForMember?: (userId: string) => void | Promise<void>;
@@ -163,6 +165,11 @@ export function ExpenseEditor({
   onClose,
   onSave,
 }: ExpenseEditorProps) {
+  const insets = useSafeAreaInsets();
+  const keyboardVerticalOffset = useMemo(
+    () => (Platform.OS === 'ios' ? insets.top + spacing.md : 0),
+    [insets.top]
+  );
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [paidByUserId, setPaidByUserId] = useState('');
@@ -397,9 +404,13 @@ export function ExpenseEditor({
     const portions = computeExpensePortionsCents(initialExpense, expenseGroup.memberIds);
 
     return (
-      <ModalBottomSheet visible={visible} onClose={onClose}>
+      <ModalBottomSheet
+        visible={visible}
+        onClose={onClose}
+        keyboardVerticalOffset={keyboardVerticalOffset}
+      >
         <View style={modalBottomSheetStyles.handle} />
-        <Text style={styles.title}>Expense details</Text>
+        <Text style={styles.title}>Expense Details</Text>
 
         <DetailField label="Description" value={initialExpense.description} />
         <DetailField
@@ -515,7 +526,25 @@ export function ExpenseEditor({
           </View>
         ) : null}
 
-        {pendingMemberUnsettle && onUnsettleForMember && !showSettleConfirm && !showUnsettleConfirm && !pendingMemberSettle ? (
+        {!(
+          showSettleConfirm ||
+          showUnsettleConfirm ||
+          pendingMemberSettle ||
+          pendingMemberUnsettle
+        ) ? (
+          <View style={styles.detailActions}>
+            {onSettle ? (
+              <Button title="Settle" variant="money" onPress={() => setShowSettleConfirm(true)} />
+            ) : null}
+            {onUnsettle ? (
+              <Button title="Unsettle" variant="cancel" onPress={() => setShowUnsettleConfirm(true)} />
+            ) : null}
+            {onEdit ? <Button title="Edit expense" onPress={onEdit} /> : null}
+            <Button title="Close" variant="secondary" onPress={onClose} />
+          </View>
+        ) : null}
+
+        {pendingMemberUnsettle && onUnsettleForMember ? (
           <InlineConfirmPanel
             title="Unsettle?"
             message={`Remove ${pendingMemberUnsettle.name}'s recorded payment for "${initialExpense.description}"? Their share will show as unpaid again.`}
@@ -545,28 +574,23 @@ export function ExpenseEditor({
           />
         ) : null}
 
-        {pendingMemberSettle && onSettleForMember && !showSettleConfirm && !showUnsettleConfirm && !pendingMemberUnsettle ? (
-          <InlineConfirmPanel
+        {pendingMemberSettle && onSettleForMember ? (
+          <SettleConfirmPanel
             title="Settle up?"
-            message={`Record that ${pendingMemberSettle.name} paid ${
+            message={`Record a payment from ${pendingMemberSettle.name} to ${
               paidByMember?.name ?? 'Member'
-            } ${formatExpenseMoney(
-              pendingMemberSettle.amountCents,
-              expenseGroup.currency
-            )} for "${initialExpense.description}"?`}
-            confirmLabel="Yes"
-            confirmVariant="money"
+            } for "${initialExpense.description}".`}
+            currency={expenseGroup.currency}
+            maxAmountCents={pendingMemberSettle.amountCents}
+            confirmLabel="Record payment"
             elevated
             loading={settlingShare}
             error={settleError}
-            onConfirm={async () => {
+            onConfirm={async (amountCents) => {
               setSettleError(null);
               setSettlingShare(true);
               try {
-                await onSettleForMember(
-                  pendingMemberSettle.userId,
-                  pendingMemberSettle.amountCents
-                );
+                await onSettleForMember(pendingMemberSettle.userId, amountCents);
                 setPendingMemberSettle(null);
               } catch (err) {
                 setSettleError(
@@ -584,22 +608,20 @@ export function ExpenseEditor({
         ) : null}
 
         {showSettleConfirm && onSettle ? (
-          <InlineConfirmPanel
+          <SettleConfirmPanel
             title="Settle up?"
-            message={`Record that you paid ${paidByMember?.name ?? 'Member'} ${formatExpenseMoney(
-              settleAmountCents ?? yourShareCents ?? 0,
-              expenseGroup.currency
-            )} for "${initialExpense.description}"?`}
-            confirmLabel="Yes"
-            confirmVariant="money"
+            message={`Record a payment to ${paidByMember?.name ?? 'Member'} for "${initialExpense.description}".`}
+            currency={expenseGroup.currency}
+            maxAmountCents={settleAmountCents ?? yourShareCents ?? 0}
+            confirmLabel="Record payment"
             elevated
             loading={settlingShare}
             error={settleError}
-            onConfirm={async () => {
+            onConfirm={async (amountCents) => {
               setSettleError(null);
               setSettlingShare(true);
               try {
-                await onSettle();
+                await onSettle(amountCents);
                 setShowSettleConfirm(false);
               } catch (err) {
                 setSettleError(
@@ -645,31 +667,16 @@ export function ExpenseEditor({
             }}
           />
         ) : null}
-
-        <View style={styles.detailActions}>
-          {!showSettleConfirm &&
-          !showUnsettleConfirm &&
-          !pendingMemberSettle &&
-          !pendingMemberUnsettle &&
-          onSettle ? (
-            <Button title="Settle" variant="money" onPress={() => setShowSettleConfirm(true)} />
-          ) : null}
-          {!showSettleConfirm &&
-          !showUnsettleConfirm &&
-          !pendingMemberSettle &&
-          !pendingMemberUnsettle &&
-          onUnsettle ? (
-            <Button title="Unsettle" variant="cancel" onPress={() => setShowUnsettleConfirm(true)} />
-          ) : null}
-          {onEdit ? <Button title="Edit expense" onPress={onEdit} /> : null}
-          <Button title="Close" variant="secondary" onPress={onClose} />
-        </View>
       </ModalBottomSheet>
     );
   }
 
   return (
-    <ModalBottomSheet visible={visible} onClose={onClose}>
+    <ModalBottomSheet
+      visible={visible}
+      onClose={onClose}
+      keyboardVerticalOffset={keyboardVerticalOffset}
+    >
       <View style={modalBottomSheetStyles.handle} />
       <Text style={styles.title}>{isEditing ? 'Edit expense' : 'Add expense'}</Text>
 

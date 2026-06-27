@@ -10,11 +10,12 @@ import { Trip } from '../types/trips';
 import { TripLocation, tripLocationFromManual } from '../types/places';
 import { TripStayInput, tripStayBlockToInput, validateTripStayInput } from '../utils/tripStays';
 import { TripStayBlockRecord } from '../utils/tripStayEntries';
+import { formatTripDayCountLabel, getTripDateRangeError } from '../utils/trips';
 import { Input } from './Input';
 import { Button } from './Button';
 import { CancelButton } from './CancelButton';
 import { LocationSearchField } from './LocationSearchField';
-import { TripDateRangeField } from './TripDateRangeField';
+import { DateRangePickerField } from './DateRangePickerField';
 import { TripTimeRangeField } from './TripTimeRangeField';
 import { ModalBottomSheet, modalBottomSheetStyles } from './ModalBottomSheet';
 import { colors, spacing, typography } from '../constants/theme';
@@ -234,12 +235,15 @@ export function TripStayEditor({
           allowManual
         />
 
-        <TripDateRangeField
+        <DateRangePickerField
           label="Dates"
+          sheetTitle="Dates"
           startDate={startDateKey}
           endDate={endDateKey}
           onStartDateChange={setStartDateKey}
           onEndDateChange={setEndDateKey}
+          getRangeError={getTripDateRangeError}
+          formatDayCountLabel={formatTripDayCountLabel}
         />
 
         {showStayTimes ? (

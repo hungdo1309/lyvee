@@ -131,8 +131,7 @@ export default function GroupItemsScreen() {
     await toggleItemComplete(
       instance.item,
       instance.isRecurring ? instance.occurrenceDate : undefined,
-      user?.id,
-      viewGroup?.members
+      user?.id
     );
   };
 

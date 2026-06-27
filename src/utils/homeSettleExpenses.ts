@@ -4,10 +4,8 @@ import { Trip } from '../types/trips';
 import { canManageGroup } from './groupRoles';
 import { getTripTitleForExpenseGroup } from './expenses';
 import {
-  compareExpensesLatestFirst,
-  computeExpensePortionsCents,
-  getUserExpenseShareRemainingCents,
-  isExpenseFullySettled,
+  compareExpensesEarliest,
+  computeOpenExpenseDebtSlices,
   isUserInvolvedInExpense,
 } from './expenseSplits';
 
@@ -47,40 +45,35 @@ export function buildHomeSettleExpenseEntries(
   for (const expenseGroup of visibleExpenseGroups) {
     const expenses = expensesByGroupId.get(expenseGroup.id) ?? [];
     const settlements = settlementsByGroupId.get(expenseGroup.id) ?? [];
-    const label = getExpenseGroupLabel(expenseGroup, trips);
+    if (expenses.length === 0) continue;
 
-    for (const expense of expenses) {
-      if (isExpenseFullySettled(expense, expenseGroup.memberIds, expenses, settlements)) {
-        continue;
-      }
+    const label = getExpenseGroupLabel(expenseGroup, trips);
+    const expenseById = new Map(expenses.map((expense) => [expense.id, expense]));
+    const openSlices = computeOpenExpenseDebtSlices(
+      expenses,
+      expenseGroup.memberIds,
+      settlements
+    );
+
+    const debtorsByExpenseId = new Map<string, HomeSettleExpenseDebtor[]>();
+
+    for (const slice of openSlices) {
+      if (!isManager && slice.debtorUserId !== userId) continue;
+
+      const debtors = debtorsByExpenseId.get(slice.expenseId) ?? [];
+      debtors.push({
+        userId: slice.debtorUserId,
+        remainingCents: slice.remainingCents,
+      });
+      debtorsByExpenseId.set(slice.expenseId, debtors);
+    }
+
+    for (const [expenseId, debtors] of debtorsByExpenseId) {
+      const expense = expenseById.get(expenseId);
+      if (!expense || debtors.length === 0) continue;
 
       const viewerInvolved = isUserInvolvedInExpense(expense, userId, expenseGroup.memberIds);
-      if (!isManager && !viewerInvolved) {
-        continue;
-      }
-
-      const debtors: HomeSettleExpenseDebtor[] = [];
-      const portions = computeExpensePortionsCents(expense, expenseGroup.memberIds);
-
-      for (const [debtorUserId, portionCents] of portions) {
-        if (debtorUserId === expense.paidByUserId || portionCents <= 0) continue;
-
-        const remainingCents = getUserExpenseShareRemainingCents(
-          expense,
-          debtorUserId,
-          expenseGroup.memberIds,
-          expenses,
-          settlements
-        );
-
-        if (remainingCents <= 0) continue;
-
-        if (!isManager && debtorUserId !== userId) continue;
-
-        debtors.push({ userId: debtorUserId, remainingCents });
-      }
-
-      if (debtors.length === 0) continue;
+      if (!isManager && !viewerInvolved) continue;
 
       entries.push({
         expense,
@@ -92,5 +85,5 @@ export function buildHomeSettleExpenseEntries(
     }
   }
 
-  return entries.sort((left, right) => compareExpensesLatestFirst(left.expense, right.expense));
+  return entries.sort((left, right) => compareExpensesEarliest(left.expense, right.expense));
 }

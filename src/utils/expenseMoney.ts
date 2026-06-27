@@ -41,3 +41,24 @@ export function parseExpenseAmountToCents(raw: string): number | null {
 
   return dollars * 100 + cents;
 }
+
+/** Normalize a typed decimal amount to two fractional digits for display. */
+export function normalizeExpenseAmountInput(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+
+  const amountCents = parseExpenseAmountToCents(trimmed);
+  if (amountCents == null) return trimmed;
+
+  return formatExpenseAmountInput(amountCents);
+}
+
+export function getSettlementAmountError(
+  amountCents: number | null,
+  maxAmountCents: number
+): string | null {
+  if (amountCents == null) return 'Enter an amount';
+  if (amountCents <= 0) return 'Amount must be greater than zero';
+  if (amountCents > maxAmountCents) return 'Amount exceeds remaining balance';
+  return null;
+}

@@ -51,6 +51,11 @@ export function countTripDays(startDate: string, endDate: string): number {
   return differenceInCalendarDays(parseISO(endDate), parseISO(startDate)) + 1;
 }
 
+export function formatTripDayCountLabel(startDate: string, endDate: string): string {
+  const dayCount = countTripDays(startDate, endDate);
+  return `${dayCount} ${dayCount === 1 ? 'day' : 'days'}`;
+}
+
 export function countTripEntries(trip: Trip): number {
   return trip.days.reduce((total, day) => total + day.entries.length, 0);
 }

@@ -5,14 +5,20 @@ import { useAuth } from '../../../src/context/AuthContext';
 import { useApp } from '../../../src/context/AppContext';
 import { ItemFormScreen } from '../../../src/components/ItemFormScreen';
 import { GroupPicker } from '../../../src/components/GroupPicker';
-import { TripDateRangeField } from '../../../src/components/TripDateRangeField';
+import { DateRangePickerField } from '../../../src/components/DateRangePickerField';
 import { DestinationSearchField } from '../../../src/components/DestinationSearchField';
 import { HeaderSaveButton } from '../../../src/components/HeaderSaveButton';
 import { MemberSearchAddField } from '../../../src/components/MemberSearchAddField';
 import { createTrip } from '../../../src/services/trips';
 import { useGroupMembers, EMPTY_MEMBER_IDS } from '../../../src/hooks/useGroupMembers';
 import { TripLocation } from '../../../src/types/places';
-import { formatTripDateKey, isValidDestination, isValidTripDateRange } from '../../../src/utils/trips';
+import {
+  formatTripDateKey,
+  formatTripDayCountLabel,
+  getTripDateRangeError,
+  isValidDestination,
+  isValidTripDateRange,
+} from '../../../src/utils/trips';
 import { addDays, startOfDay } from 'date-fns';
 import { colors, spacing } from '../../../src/constants/theme';
 
@@ -102,11 +108,15 @@ export default function CreateTripScreen() {
         error={destinationError}
       />
 
-      <TripDateRangeField
+      <DateRangePickerField
+        label="Travel dates"
+        sheetTitle="Travel dates"
         startDate={startDate}
         endDate={endDate}
         onStartDateChange={setStartDate}
         onEndDateChange={setEndDate}
+        getRangeError={getTripDateRangeError}
+        formatDayCountLabel={formatTripDayCountLabel}
       />
 
       <MemberSearchAddField
