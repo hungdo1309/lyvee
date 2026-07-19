@@ -4,7 +4,9 @@
   "main": "expo-router/entry",
   "expo": {
     "install": {
-      "exclude": ["@react-navigation/drawer"]
+      "exclude": [
+        "@react-navigation/drawer"
+      ]
     }
   },
   "dependencies": {
@@ -42,6 +44,7 @@
   "devDependencies": {
     "@ngrok/ngrok": "^1.7.0",
     "@types/react": "~19.1.10",
+    "cross-env": "^10.1.0",
     "firebase-tools": "^14.0.0",
     "typescript": "~5.9.2"
   },
@@ -52,11 +55,11 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build:dev": "npx eas-cli build --profile development --platform all",
-    "build:preview": "npx eas-cli build --profile preview --platform all",
-    "build:android": "npx eas-cli build --profile production --platform android",
-    "build:ios": "npx eas-cli build --profile production --platform ios",
-    "build:all": "npx eas-cli build --profile production --platform all",
+    "build:dev": "cross-env EAS_BUILD_NO_EXPO_GO_WARNING=true npx eas-cli build --profile development --platform all",
+    "build:preview": "cross-env EAS_BUILD_NO_EXPO_GO_WARNING=true npx eas-cli build --profile preview --platform all",
+    "build:android": "cross-env EAS_BUILD_NO_EXPO_GO_WARNING=true npx eas-cli build --profile production --platform android",
+    "build:ios": "cross-env EAS_BUILD_NO_EXPO_GO_WARNING=true npx eas-cli build --profile production --platform ios",
+    "build:all": "cross-env EAS_BUILD_NO_EXPO_GO_WARNING=true npx eas-cli build --profile production --platform all",
     "submit:android": "npx eas-cli submit --platform android --latest --profile production",
     "submit:ios": "npx eas-cli submit --platform ios --latest --profile production",
     "deploy:firebase": "firebase deploy --only functions,firestore:rules,firestore:indexes"
