@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { router, type Href, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '../context/AuthContext';
 import { useAppDrawer } from '../context/AppDrawerContext';
 import { GROUPS_ICON_SIZES, GroupsIcon } from './GroupsIcon';
@@ -9,7 +10,8 @@ import { ExpensesIcon } from './ExpensesIcon';
 import { APP_NAME } from '../constants/app';
 import { colors, radius, spacing, typography } from '../constants/theme';
 
-type DrawerRouteName = 'home' | 'index' | 'trips' | 'expenses' | 'groups' | 'settings';
+type DrawerTabRouteName = 'home' | 'index' | 'trips' | 'expenses' | 'groups' | 'settings';
+type DrawerRouteName = DrawerTabRouteName | 'other-apps';
 
 interface DrawerNavItem {
   routeName: DrawerRouteName;
@@ -24,6 +26,11 @@ const NAV_ITEMS: DrawerNavItem[] = [
   { routeName: 'expenses', label: 'Expenses', href: '/(app)/(tabs)/expenses' as Href },
   { routeName: 'groups', label: 'Groups', href: '/(app)/(tabs)/groups' as Href },
   { routeName: 'settings', label: 'Settings', href: '/(app)/(tabs)/settings' as Href },
+  {
+    routeName: 'other-apps',
+    label: 'My Other Apps',
+    href: '/(app)/(tabs)/other-apps' as Href,
+  },
 ];
 
 const emojiIconStyle = { fontSize: 18 };
@@ -31,6 +38,7 @@ const emojiIconStyle = { fontSize: 18 };
 function useActiveDrawerRoute(): DrawerRouteName {
   const pathname = usePathname();
 
+  if (pathname.includes('/other-apps')) return 'other-apps';
   if (pathname.includes('/settings')) return 'settings';
   if (pathname.includes('/groups')) return 'groups';
   if (pathname.includes('/expenses') || pathname.includes('/expense/')) return 'expenses';
@@ -57,6 +65,17 @@ function DrawerNavIcon({
 
   if (item.routeName === 'expenses') {
     return <ExpensesIcon size={18} />;
+  }
+
+  if (item.routeName === 'other-apps') {
+    return (
+      <Ionicons
+        name="apps-outline"
+        size={18}
+        color={isActive ? colors.primary : colors.primaryDark}
+        style={{ opacity: isActive ? 1 : 0.65 }}
+      />
+    );
   }
 
   const emoji =

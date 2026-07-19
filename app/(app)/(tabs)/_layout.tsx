@@ -66,6 +66,7 @@ export default function TabsLayout() {
           <MaterialTopTabs.Screen name="expenses" />
           <MaterialTopTabs.Screen name="groups" />
           <MaterialTopTabs.Screen name="settings" />
+          <MaterialTopTabs.Screen name="other-apps" />
         </MaterialTopTabs>
       </Drawer>
     </AppDrawerProvider>
