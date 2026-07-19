@@ -1,0 +1,23 @@
+---
+description: Remind to generate public Terms/Privacy Google Docs at App Store / Play submission
+alwaysApply: true
+---
+
+# Store listing — public legal URLs
+
+When the user works on **App Store**, **Google Play**, **store listing**, **EAS submit**, **app review**, or asks about publishing / going live:
+
+## Remind them
+
+Terms and Privacy currently live **in-app only**. Stores need **public https URLs**.
+
+Owner plan (do not invent a website):
+
+1. Remind: “For store submission, generate shareable Google Docs (or Notion) for Terms and Privacy from `src/constants/legalTerms.ts` and `src/constants/legalPrivacy.ts`.”
+2. Offer to draft the full doc text from those files when they are ready.
+3. After they create public “anyone with the link” URLs, wire them into store listings (and optionally Settings / legal screens).
+
+## Do not
+
+- Invent fake domains or claim a website exists.
+- Name the individual publisher in legal copy unless they explicitly ask (operator is “LyVee Labs” as an individual; contact `lyveelabs@gmail.com`; Texas / Harris County).

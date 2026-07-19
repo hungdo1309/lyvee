@@ -17,8 +17,10 @@ import {
 } from '../../src/context/AuthContext';
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
+import { AppLogoHeader } from '../../src/components/AppLogoHeader';
 import { AuthDivider } from '../../src/components/AuthDivider';
 import { GoogleSignInButton } from '../../src/components/GoogleSignInButton';
+import { LegalAcceptanceCheckbox } from '../../src/components/LegalAcceptanceCheckbox';
 import { PasswordStrengthIndicator } from '../../src/components/PasswordStrengthIndicator';
 import { PasswordRequirementsChecklist } from '../../src/components/PasswordRequirementsChecklist';
 import { PasswordChecklist } from '../../src/components/PasswordChecklist';
@@ -41,11 +43,13 @@ export default function SignUpScreen() {
   const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [errors, setErrors] = useState<{
     name?: string;
     email?: string;
     password?: string;
     confirmPassword?: string;
+    legal?: string;
   }>({});
 
   const passwordValidation = useMemo(() => validatePassword(password), [password]);
@@ -62,7 +66,8 @@ export default function SignUpScreen() {
     name.trim().length > 0 &&
     email.trim().length > 0 &&
     passwordValidation.isValid &&
-    passwordsMatch;
+    passwordsMatch &&
+    acceptedLegal;
 
   const validate = () => {
     const next: typeof errors = {};
@@ -75,6 +80,9 @@ export default function SignUpScreen() {
       next.confirmPassword = 'Confirm your password';
     } else if (confirmPassword !== password) {
       next.confirmPassword = 'Passwords do not match';
+    }
+    if (!acceptedLegal) {
+      next.legal = 'Please agree to the Terms of Use and Privacy Policy';
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -105,6 +113,14 @@ export default function SignUpScreen() {
   };
 
   const handleGoogleSignUp = async () => {
+    if (!acceptedLegal) {
+      setErrors((current) => ({
+        ...current,
+        legal: 'Please agree to the Terms of Use and Privacy Policy',
+      }));
+      return;
+    }
+
     if (!isFirebaseConfigured()) {
       appAlert(
         'Firebase not configured',
@@ -156,8 +172,7 @@ export default function SignUpScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <Text style={styles.title}>Create account</Text>
-            <Text style={styles.subtitle}>Start organizing life together</Text>
+            <AppLogoHeader tagline="Start organizing life together" />
           </View>
 
           <View style={styles.form}>
@@ -221,6 +236,17 @@ export default function SignUpScreen() {
             </View>
           </View>
 
+          <LegalAcceptanceCheckbox
+            checked={acceptedLegal}
+            onChange={(checked) => {
+              setAcceptedLegal(checked);
+              if (checked) {
+                setErrors((current) => ({ ...current, legal: undefined }));
+              }
+            }}
+            error={errors.legal}
+          />
+
           <View style={styles.authActions}>
             <Button
               title="Create Account"
@@ -235,7 +261,7 @@ export default function SignUpScreen() {
                 <GoogleSignInButton
                   onPress={handleGoogleSignUp}
                   loading={googleLoading}
-                  disabled={loading}
+                  disabled={loading || !acceptedLegal}
                 />
               </>
             ) : null}
@@ -269,14 +295,6 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: spacing.xl,
-  },
-  title: {
-    ...typography.title,
-    fontSize: 32,
-  },
-  subtitle: {
-    ...typography.caption,
-    marginTop: spacing.sm,
   },
   form: {
     marginBottom: 0,
