@@ -116,7 +116,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.mdTight,
+    minHeight: 52,
     fontSize: 16,
     color: colors.text,
   },
@@ -124,14 +125,17 @@ const styles = StyleSheet.create({
     paddingRight: spacing.xxl,
   },
   inputFocused: {
+    borderWidth: 1.5,
     borderColor: colors.primary,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceElevated,
   },
   inputSuccess: {
     borderColor: colors.success,
+    backgroundColor: colors.successMuted,
   },
   inputError: {
     borderColor: colors.error,
+    backgroundColor: colors.errorMuted,
   },
   toggle: {
     position: 'absolute',
@@ -139,7 +143,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: spacing.xxs,
   },
   error: {
     fontSize: 13,

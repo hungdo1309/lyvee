@@ -125,11 +125,9 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl + 56,
   },
   sectionHeading: {
-    ...typography.caption,
+    ...typography.sectionTitle,
     paddingHorizontal: layout.screenPadding,
     marginBottom: spacing.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   tripList: {
     paddingHorizontal: layout.screenPadding,

@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { ItemType } from '../types';
 import { ItemTypeFilter } from '../utils/itemFilters';
-import { colors, itemTypeConfig, radius, spacing } from '../constants/theme';
+import { colors, itemTypeConfig, radius, spacing, typography } from '../constants/theme';
 import { HorizontalChipRow } from './HorizontalChipRow';
 import { TagFilterBar } from './TagFilterBar';
 
@@ -141,11 +141,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   title: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    ...typography.sectionTitle,
   },
   clear: {
     fontSize: 13,
@@ -153,9 +149,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   label: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.textMuted,
+    ...typography.sectionTitle,
     paddingHorizontal: spacing.md,
     marginBottom: spacing.xs,
     marginTop: spacing.xs,
@@ -173,7 +167,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   chipSelected: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primaryMuted,
     borderColor: colors.primary,
   },
   chipText: {

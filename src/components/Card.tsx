@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
   base: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: colors.border,
     marginBottom: layout.listGap,
     ...shadows.card,
@@ -84,11 +84,11 @@ const styles = StyleSheet.create({
   },
   active: {
     borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primaryMuted,
   },
   selected: {
     borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primaryMuted,
   },
   flat: {
     shadowOpacity: 0,

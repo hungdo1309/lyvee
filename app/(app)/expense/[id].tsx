@@ -715,11 +715,7 @@ const styles = StyleSheet.create({
     color: colors.primaryDark,
   },
   balanceLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    ...typography.sectionTitle,
   },
   balanceValue: {
     fontSize: 20,

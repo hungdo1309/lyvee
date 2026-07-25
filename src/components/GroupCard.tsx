@@ -106,9 +106,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: spacing.sm,
-    backgroundColor: colors.iconBg,
+    backgroundColor: colors.primaryMuted,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   chevronWrapExpanded: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primaryMuted,
+    borderColor: colors.primary,
   },
 });

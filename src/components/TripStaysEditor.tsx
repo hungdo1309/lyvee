@@ -241,15 +241,15 @@ const styles = StyleSheet.create({
   stayCard: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-    borderRadius: radius.md,
-    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceElevated,
     overflow: 'hidden',
   },
   stayCardBody: {
     flex: 1,
-    padding: spacing.sm,
+    padding: spacing.mdTight,
     gap: 4,
   },
   stayCardHeader: {
@@ -258,8 +258,10 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   stayLabel: {
-    ...typography.label,
+    ...typography.sectionTitle,
     fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
     flex: 1,
   },
   stayCity: {
@@ -274,8 +276,9 @@ const styles = StyleSheet.create({
   deleteButton: {
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: colors.borderLight,
+    borderLeftWidth: 1,
+    borderLeftColor: colors.border,
+    backgroundColor: colors.errorMuted,
   },
   actions: {
     flexDirection: 'row',

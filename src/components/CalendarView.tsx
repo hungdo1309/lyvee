@@ -6,7 +6,7 @@ import { addMonths, format, parseISO, startOfMonth } from 'date-fns';
 import { ItemInstance } from '../utils/itemInstances';
 import { Trip } from '../types/trips';
 import { TripPlanInstance } from '../utils/tripInstances';
-import { colors, layout, radius, spacing, typography } from '../constants/theme';
+import { colors, layout, radius, shadows, spacing, typography } from '../constants/theme';
 import { getInstancesForDate, getMarkedDatesFromItems } from '../utils/dates';
 import {
   getMarkedDatesFromTrips,
@@ -297,9 +297,10 @@ const styles = StyleSheet.create({
     marginBottom: layout.sectionGap,
     borderRadius: radius.lg,
     overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
+    ...shadows.card,
   },
   monthNav: {
     flexDirection: 'row',
@@ -308,14 +309,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingTop: spacing.sm,
     paddingBottom: spacing.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
+    backgroundColor: colors.surfaceElevated,
   },
   monthNavButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: radius.md,
+    backgroundColor: colors.primaryMuted,
   },
   monthNavLabel: {
     flexDirection: 'row',
@@ -329,6 +333,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: colors.text,
+    letterSpacing: -0.2,
   },
   hiddenCalendarHeader: {
     height: 0,

@@ -4,7 +4,7 @@ import { appAlert } from '../utils/dialog';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { addMonths } from 'date-fns';
 import { ItemInstance, expandItem, isOverdueCalendarInstance } from '../utils/itemInstances';
-import { colors, itemTypeConfig, radius, spacing, itemTypeSupportsRecurring } from '../constants/theme';
+import { colors, itemTypeConfig, radius, spacing, typography, itemTypeSupportsRecurring } from '../constants/theme';
 import { formatItemDate, formatItemDateShort } from '../utils/dates';
 import { formatRecurringLabel, toOccurrenceKey } from '../utils/recurrence';
 import { getItemTags } from '../utils/tags';
@@ -124,7 +124,7 @@ export const ItemCard = React.memo(function ItemCard({
 
         <View style={styles.content}>
           <View style={styles.header}>
-            <View style={[styles.typeBadge, { backgroundColor: config.color + '15' }]}>
+            <View style={[styles.typeBadge, { backgroundColor: config.color + '18', borderColor: config.color }]}>
               <Text style={[styles.typeText, { color: config.color }]}>
                 {config.label}
               </Text>
@@ -262,8 +262,9 @@ const styles = StyleSheet.create({
   },
   typeBadge: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm / 4,
+    paddingVertical: spacing.xxs,
     borderRadius: radius.sm,
+    borderWidth: 1,
   },
   typeText: {
     fontSize: 11,
@@ -283,8 +284,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
-    borderWidth: StyleSheet.hairlineWidth,
+    backgroundColor: colors.primaryMuted,
+    borderWidth: 1,
     borderColor: colors.border,
   },
   itemDate: {
@@ -340,19 +341,15 @@ const styles = StyleSheet.create({
   },
   upcomingBlock: {
     marginTop: spacing.md,
-    backgroundColor: colors.background,
-    padding: spacing.sm,
+    backgroundColor: colors.surfaceElevated,
+    padding: spacing.mdTight,
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   sectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
+    ...typography.sectionTitle,
     marginBottom: spacing.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   upcomingRow: {
     fontSize: 14,

@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   chipSelected: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primaryMuted,
     borderColor: colors.primary,
   },
   chipText: {
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   chipTextSelected: {
-    color: colors.primary,
+    color: colors.primaryDark,
     fontWeight: '600',
   },
   chipTextDefault: {

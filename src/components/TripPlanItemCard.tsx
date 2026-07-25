@@ -39,7 +39,7 @@ export function TripPlanItemCard({ instance, onPress, groupName }: TripPlanItemC
           {groupName ? ` · ${groupName}` : ''}
         </Text>
         <View style={styles.metaRow}>
-          <View style={[styles.tagPill, { backgroundColor: tagStyle.backgroundColor }]}>
+          <View style={[styles.tagPill, { backgroundColor: tagStyle.backgroundColor, borderColor: tagStyle.color }]}>
             <Ionicons
               name={getTripEntryTagIcon(entry.tag) as keyof typeof Ionicons.glyphMap}
               size={12}
@@ -73,7 +73,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: radius.md,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primaryMuted,
+    borderWidth: 1,
+    borderColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -104,6 +106,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: radius.full,
+    borderWidth: 1,
   },
   tagPillText: {
     fontSize: 12,

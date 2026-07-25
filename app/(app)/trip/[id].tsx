@@ -542,9 +542,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   sectionHeading: {
-    ...typography.caption,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    ...typography.sectionTitle,
   },
   dayList: {
     gap: spacing.sm,

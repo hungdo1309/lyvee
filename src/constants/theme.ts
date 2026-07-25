@@ -10,31 +10,46 @@ export const brand = {
 export const colors = {
   background: brand.lavender,
   surface: '#FFFFFF',
+  /** Nested / pressed rows inside white cards (Invest-style surface ladder). */
+  surfaceElevated: brand.lavenderSoft,
   primary: brand.purple,
   primaryDark: brand.purpleDark,
   primaryLight: '#F0ECFA',
+  /** ~12% brand fills for pills, empty tiles, status panels. */
+  primaryMuted: 'rgba(122, 111, 216, 0.12)',
   text: '#1A1528',
   textSecondary: '#6E6785',
   textMuted: '#9A94AB',
+  /** Dimmer caption (Invest textDim analogue). */
+  textDim: '#B0A9C0',
   border: '#DDD4F5',
   borderLight: '#EFEBF7',
+  borderStrong: '#C9BDE8',
   error: '#DC2626',
+  errorMuted: 'rgba(220, 38, 38, 0.12)',
   success: '#34C759',
+  successMuted: 'rgba(52, 199, 89, 0.12)',
   warning: '#FF9500',
+  warningMuted: 'rgba(255, 149, 0, 0.12)',
   task: '#F59E0B',
   activity: brand.purple,
   document: '#10B981',
   /** US-dollar green for expense/money UI */
   money: '#228B22',
   moneyLight: '#E8F5E9',
+  moneyMuted: 'rgba(34, 139, 34, 0.12)',
   overlay: 'rgba(26, 21, 40, 0.45)',
   iconBg: brand.lavenderSoft,
   onPrimary: '#FFFFFF',
 };
 
-/** 8 / 16 / 24 / 32 spacing scale */
+/** Spacing: 4 / 8 / 12 / 16 / 24 / 32 (xs stays 8 for existing layouts). */
 export const spacing = {
+  /** Dense rung (Invest xs) — prefer for tight icon gaps. */
+  xxs: 4,
   sm: 8,
+  /** Between sm and md — list row / chip density. */
+  mdTight: 12,
   md: 16,
   lg: 24,
   xl: 32,
@@ -89,6 +104,13 @@ export const typography = {
     color: colors.textSecondary,
     letterSpacing: 0.3,
     textTransform: 'uppercase' as const,
+  },
+  /** Quieter section titles (Invest-style sentence case). */
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '500' as const,
+    color: colors.textSecondary,
+    letterSpacing: 0,
   },
 };
 

@@ -217,29 +217,22 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   sectionHeading: {
-    ...typography.caption,
+    ...typography.sectionTitle,
     marginBottom: 0,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   list: {
     paddingHorizontal: layout.screenPadding,
-    gap: 4,
+    gap: spacing.xxs,
     marginBottom: spacing.md,
   },
   section: {
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     overflow: 'hidden',
   },
   sectionHasItems: {
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: colors.warning,
-    backgroundColor: colors.surface,
-    shadowColor: colors.warning,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: colors.warningMuted,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -247,7 +240,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.mdTight,
   },
   sectionHeaderContent: {
     flex: 1,
@@ -301,8 +294,8 @@ const styles = StyleSheet.create({
   },
   debtorList: {
     gap: spacing.xs,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderLight,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
     paddingTop: spacing.sm,
   },
   debtorRow: {

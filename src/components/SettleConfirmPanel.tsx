@@ -120,23 +120,25 @@ export function SettleConfirmPanel({
 
 const styles = StyleSheet.create({
   panel: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-    borderRadius: radius.md,
-    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceElevated,
     padding: spacing.md,
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
   panelElevated: {
     backgroundColor: colors.surface,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
     borderRadius: radius.lg,
     ...shadows.card,
   },
   title: {
-    ...typography.label,
-    fontSize: 16,
+    ...typography.sectionTitle,
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
   },
   message: {
     ...typography.caption,

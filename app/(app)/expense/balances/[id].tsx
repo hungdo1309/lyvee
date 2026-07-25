@@ -233,7 +233,7 @@ export default function ExpenseBalancesScreen() {
               <Switch
                 value={simplifyDebts}
                 onValueChange={setSimplifyDebts}
-                trackColor={{ false: colors.border, true: colors.primaryLight }}
+                trackColor={{ false: colors.border, true: colors.primaryMuted }}
                 thumbColor={simplifyDebts ? colors.primary : colors.surface}
                 ios_backgroundColor={colors.border}
                 accessibilityLabel="Simplify debts"
@@ -403,11 +403,7 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   summaryLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    ...typography.sectionTitle,
   },
   summaryValue: {
     fontSize: 20,

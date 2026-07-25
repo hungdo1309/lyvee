@@ -84,7 +84,7 @@ export default function SettingsScreen() {
         </View>
       </Card>
 
-      <SectionCard title="Account">
+      <SectionCard title="Account" quietTitle>
         {hasPassword ? (
           <>
             <Button
@@ -122,7 +122,7 @@ export default function SettingsScreen() {
         ) : null}
       </SectionCard>
 
-      <SectionCard title="Support">
+      <SectionCard title="Support" quietTitle>
         <Button
           title="Send Feedback"
           variant="secondary"
@@ -130,7 +130,7 @@ export default function SettingsScreen() {
         />
       </SectionCard>
 
-      <SectionCard title="About">
+      <SectionCard title="About" quietTitle>
         <InfoRow label="App" value={`${APP_NAME} v${appVersion}`} />
       </SectionCard>
 

@@ -204,10 +204,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   sectionHeading: {
-    ...typography.caption,
+    ...typography.sectionTitle,
     marginBottom: spacing.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   tripSection: {
     marginTop: spacing.lg,

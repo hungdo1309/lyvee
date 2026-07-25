@@ -485,7 +485,7 @@ const styles = StyleSheet.create({
   },
   filterButtonActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primaryMuted,
   },
   filterButtonText: {
     fontSize: 14,
@@ -493,47 +493,35 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   filterButtonTextActive: {
-    color: colors.primary,
+    color: colors.primaryDark,
   },
   sectionHeading: {
-    ...typography.caption,
+    ...typography.sectionTitle,
     flex: 1,
     marginBottom: 0,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   dayList: {
     paddingHorizontal: layout.screenPadding,
-    gap: 4,
+    gap: spacing.xxs,
   },
   daySection: {
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     overflow: 'hidden',
   },
   daySectionEmpty: {
     borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderColor: colors.border,
     backgroundColor: 'transparent',
   },
   daySectionHasItems: {
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: colors.primary,
-    backgroundColor: colors.surface,
-    shadowColor: colors.primaryDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: colors.primaryMuted,
   },
   daySectionOverdue: {
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: colors.error,
-    backgroundColor: colors.surface,
-    shadowColor: colors.error,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: colors.errorMuted,
   },
   dayHeader: {
     flexDirection: 'row',
@@ -541,7 +529,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.mdTight,
   },
   dayHeaderText: {
     flex: 1,
@@ -555,7 +543,7 @@ const styles = StyleSheet.create({
   },
   dayHeaderTextHasItems: {
     fontWeight: '700',
-    color: colors.text,
+    color: colors.primaryDark,
   },
   dayHeaderTextOverdue: {
     fontWeight: '700',

@@ -32,7 +32,10 @@ export function TagPills({
             style={[
               styles.pill,
               isSmall ? styles.pillSm : styles.pillMd,
-              { backgroundColor: style.backgroundColor },
+              {
+                backgroundColor: style.backgroundColor,
+                borderColor: style.color,
+              },
             ]}
           >
             <Text
@@ -76,6 +79,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: radius.full,
+    borderWidth: 1,
   },
   pillSm: {
     paddingHorizontal: spacing.sm,
@@ -83,7 +87,7 @@ const styles = StyleSheet.create({
   },
   pillMd: {
     paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.xxs,
   },
   label: {
     fontWeight: '500',
@@ -101,6 +105,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   overflow: {
-    backgroundColor: colors.iconBg,
+    backgroundColor: colors.primaryMuted,
+    borderColor: colors.primary,
   },
 });

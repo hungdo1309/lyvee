@@ -43,5 +43,7 @@ const styles = StyleSheet.create({
     ...typography.caption,
     marginTop: spacing.sm,
     textAlign: 'center',
+    color: colors.textSecondary,
+    maxWidth: 280,
   },
 });

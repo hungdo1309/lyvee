@@ -42,7 +42,9 @@ export function CalendarDayCell({
 
   const backgroundColor = isSelected
     ? (marking.selectedColor ?? colors.primary)
-    : 'transparent';
+    : isToday
+      ? colors.primaryMuted
+      : 'transparent';
 
   const textColor = isSelected
     ? (marking.selectedTextColor ?? colors.onPrimary)
@@ -51,12 +53,17 @@ export function CalendarDayCell({
       : isOverdue
         ? colors.error
         : isToday
-          ? colors.primary
+          ? colors.primaryDark
           : colors.text;
 
   return (
     <TouchableOpacity
-      style={[styles.container, isSelected && { backgroundColor }]}
+      style={[
+        styles.container,
+        (isSelected || isToday) && { backgroundColor },
+        isToday && !isSelected && styles.todayRing,
+        isOverdue && !isSelected && styles.overdueRing,
+      ]}
       onPress={() => onPress?.(date)}
       onLongPress={() => onLongPress?.(date)}
       disabled={touchDisabled}
@@ -101,6 +108,15 @@ const styles = StyleSheet.create({
     width: 32,
     height: 36,
     borderRadius: 16,
+  },
+  todayRing: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  overdueRing: {
+    borderWidth: 1,
+    borderColor: colors.error,
+    backgroundColor: colors.errorMuted,
   },
   dayText: {
     fontSize: 15,

@@ -98,8 +98,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
   },
   iconWrap: {
-    borderRadius: radius.full,
-    backgroundColor: colors.iconBg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primaryMuted,
+    borderWidth: 1,
+    borderColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
@@ -118,6 +120,7 @@ const styles = StyleSheet.create({
     ...typography.caption,
     textAlign: 'center',
     maxWidth: 280,
+    color: colors.textSecondary,
   },
   action: {
     marginTop: spacing.md,
@@ -127,7 +130,9 @@ const styles = StyleSheet.create({
   },
   hintCard: {
     marginBottom: 0,
-    backgroundColor: colors.iconBg,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   hintText: {
     ...typography.caption,

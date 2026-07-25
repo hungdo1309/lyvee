@@ -5,14 +5,18 @@ import { colors, layout, spacing, typography } from '../constants/theme';
 
 interface SectionCardProps {
   title?: string;
+  /** Use quieter sentence-case title (Invest-style). Default keeps uppercase labels. */
+  quietTitle?: boolean;
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
 }
 
-export function SectionCard({ title, children, style }: SectionCardProps) {
+export function SectionCard({ title, quietTitle = false, children, style }: SectionCardProps) {
   return (
     <View style={[styles.wrapper, style]}>
-      {title ? <Text style={styles.title}>{title}</Text> : null}
+      {title ? (
+        <Text style={[styles.title, quietTitle && styles.titleQuiet]}>{title}</Text>
+      ) : null}
       <Card padded style={styles.card}>
         {children}
       </Card>
@@ -29,6 +33,10 @@ const styles = StyleSheet.create({
     ...typography.label,
     marginBottom: spacing.sm,
     marginLeft: spacing.sm,
+  },
+  titleQuiet: {
+    ...typography.sectionTitle,
+    textTransform: 'none',
   },
   card: {
     marginBottom: 0,

@@ -113,7 +113,7 @@ export function TripDaySection({
             ) : null}
           </View>
           <View style={styles.entryMetaRow}>
-            <View style={[styles.tagPill, { backgroundColor: tagStyle.backgroundColor }]}>
+            <View style={[styles.tagPill, { backgroundColor: tagStyle.backgroundColor, borderColor: tagStyle.color }]}>
               <Text style={[styles.tagPillText, { color: tagStyle.color }]}>
                 {formatTripEntryTagLabel(entry.tag)}
               </Text>
@@ -233,19 +233,19 @@ export function TripDaySection({
 
 const styles = StyleSheet.create({
   section: {
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderColor: colors.border,
     backgroundColor: colors.surface,
   },
   sectionOverlap: {
     borderColor: colors.error,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: colors.errorMuted,
   },
   sectionOutOfOrder: {
     borderColor: colors.warning,
-    backgroundColor: '#FFF7ED',
+    backgroundColor: colors.warningMuted,
   },
   header: {
     flexDirection: 'row',
@@ -253,13 +253,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.mdTight,
   },
   headerOverlap: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: colors.errorMuted,
   },
   headerOutOfOrder: {
-    backgroundColor: '#FFEDD5',
+    backgroundColor: colors.warningMuted,
   },
   headerTextWrap: {
     flex: 1,
@@ -269,6 +269,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: colors.text,
+    letterSpacing: -0.2,
   },
   dayTitleIssue: {
     color: colors.error,
@@ -295,7 +296,7 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: spacing.sm,
     paddingBottom: spacing.sm,
-    paddingTop: 4,
+    paddingTop: spacing.xxs,
     gap: spacing.sm,
   },
   empty: {
@@ -311,21 +312,24 @@ const styles = StyleSheet.create({
   },
   entryCardOverlap: {
     borderColor: colors.error,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: colors.errorMuted,
   },
   entryCardOutOfOrder: {
     borderColor: colors.warning,
-    backgroundColor: '#FFF7ED',
+    backgroundColor: colors.warningMuted,
   },
   entryCardDragging: {
     opacity: 0.92,
     borderColor: colors.primary,
+    backgroundColor: colors.primaryMuted,
   },
   entryIcon: {
     width: 36,
     height: 36,
     borderRadius: radius.sm,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primaryMuted,
+    borderWidth: 1,
+    borderColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -355,6 +359,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
+    borderWidth: 1,
   },
   tagPillText: {
     fontSize: 12,
@@ -389,9 +394,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.primary,
     borderStyle: 'dashed',
-    backgroundColor: colors.background,
+    backgroundColor: colors.primaryMuted,
   },
   addButtonText: {
     fontSize: 14,

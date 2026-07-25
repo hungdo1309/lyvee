@@ -853,7 +853,7 @@ const styles = StyleSheet.create({
   },
   chipSelected: {
     borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primaryMuted,
   },
   chipText: {
     fontSize: 14,
@@ -916,18 +916,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   preview: {
-    borderRadius: radius.md,
-    backgroundColor: colors.background,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
     padding: spacing.md,
     marginBottom: spacing.md,
     gap: 4,
   },
   previewLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    ...typography.sectionTitle,
   },
   previewValue: {
     fontSize: 20,
@@ -950,7 +948,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   detailLabel: {
-    ...typography.label,
+    ...typography.sectionTitle,
   },
   detailValue: {
     fontSize: 16,
@@ -958,18 +956,16 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   settleSection: {
-    borderRadius: radius.md,
-    backgroundColor: colors.background,
+    borderRadius: radius.lg,
+    backgroundColor: colors.moneyMuted,
+    borderWidth: 1,
+    borderColor: colors.money,
     padding: spacing.md,
     marginBottom: spacing.md,
     gap: spacing.sm,
   },
   settleLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    ...typography.sectionTitle,
   },
   settleAmount: {
     fontSize: 20,

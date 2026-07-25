@@ -70,13 +70,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   secondary: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primaryMuted,
+    borderWidth: 1,
+    borderColor: colors.primary,
   },
   ghost: {
     backgroundColor: 'transparent',
   },
   danger: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: colors.errorMuted,
+    borderWidth: 1,
+    borderColor: colors.error,
   },
   cancel: {
     backgroundColor: colors.error,
@@ -89,8 +93,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   size_md: {
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.mdTight,
     paddingHorizontal: spacing.lg,
+    minHeight: 48,
   },
   size_lg: {
     paddingVertical: spacing.md,
