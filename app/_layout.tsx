@@ -7,6 +7,7 @@ import { AuthProvider } from '../src/context/AuthContext';
 import { ActivityNotificationsProvider } from '../src/context/ActivityNotificationsContext';
 import { AppProvider } from '../src/context/AppContext';
 import { DialogProvider } from '../src/context/DialogContext';
+import { ForceUpdateGate } from '../src/components/ForceUpdateGate';
 import { NotificationHandler } from '../src/components/NotificationHandler';
 import { configureDevLogBox } from '../src/utils/devLogBox';
 
@@ -20,6 +21,7 @@ export default function RootLayout() {
           <ActivityNotificationsProvider>
             <AppProvider>
               <NotificationHandler />
+              <ForceUpdateGate />
               <StatusBar style="dark" />
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="index" />

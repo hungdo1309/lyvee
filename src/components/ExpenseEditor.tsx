@@ -50,6 +50,8 @@ interface ExpenseEditorProps {
   yourShareCents?: number | null;
   settleAmountCents?: number | null;
   expenseSettled?: boolean;
+  /** Remaining unpaid share per member (read-only). Missing key = full share still owed. */
+  shareRemainingByUserId?: Map<string, number> | null;
   memberSettleDebtors?: Array<{ userId: string; name: string; remainingCents: number }>;
   memberUnsettleTargets?: Array<{ userId: string; name: string }>;
   showNotInvolved?: boolean;
@@ -159,6 +161,7 @@ export function ExpenseEditor({
   yourShareCents = null,
   settleAmountCents = null,
   expenseSettled = false,
+  shareRemainingByUserId = null,
   memberSettleDebtors = [],
   memberUnsettleTargets = [],
   showNotInvolved = false,
@@ -439,24 +442,85 @@ export function ExpenseEditor({
         <View style={styles.preview}>
           <Text style={styles.previewLabel}>Split breakdown</Text>
           <View style={styles.previewList}>
-            {participants.map((member) => (
-              <Text key={member.id} style={styles.previewRow}>
-                {member.name}:{' '}
-                {formatExpenseMoney(portions.get(member.id) ?? 0, expenseGroup.currency)}
-              </Text>
-            ))}
+            {participants.map((member) => {
+              const shareCents = portions.get(member.id) ?? 0;
+              const isPayer = member.id === initialExpense.paidByUserId;
+              const shareLabel = formatExpenseMoney(shareCents, expenseGroup.currency);
+
+              if (isPayer) {
+                return (
+                  <Text key={member.id} style={styles.previewRow}>
+                    {member.name}: {shareLabel}
+                    <Text style={styles.previewPaymentMeta}> · paid the bill</Text>
+                  </Text>
+                );
+              }
+
+              if (shareCents <= 0) {
+                return (
+                  <Text key={member.id} style={styles.previewRow}>
+                    {member.name}: {shareLabel}
+                  </Text>
+                );
+              }
+
+              const remainingCents =
+                shareRemainingByUserId?.get(member.id) ?? shareCents;
+              const paidCents = Math.max(0, shareCents - remainingCents);
+
+              if (remainingCents <= 0) {
+                return (
+                  <Text key={member.id} style={styles.previewRow}>
+                    {member.name}: {shareLabel}
+                    <Text style={styles.previewPaymentMeta}> · settled</Text>
+                  </Text>
+                );
+              }
+
+              if (paidCents > 0) {
+                return (
+                  <Text key={member.id} style={styles.previewRow}>
+                    {member.name}: {shareLabel}
+                    <Text style={styles.previewPaymentMeta}>
+                      {' '}
+                      · paid {formatExpenseMoney(paidCents, expenseGroup.currency)}, owes{' '}
+                      {formatExpenseMoney(remainingCents, expenseGroup.currency)}
+                    </Text>
+                  </Text>
+                );
+              }
+
+              return (
+                <Text key={member.id} style={styles.previewRow}>
+                  {member.name}: {shareLabel}
+                </Text>
+              );
+            })}
           </View>
         </View>
 
         {yourShareCents != null ? (
           <View style={styles.settleSection}>
-            <Text style={styles.settleLabel}>Your share</Text>
+            <Text style={styles.settleLabel}>
+              {expenseSettled
+                ? 'Your share'
+                : settleAmountCents != null && settleAmountCents < yourShareCents
+                  ? 'You still owe'
+                  : 'Your share'}
+            </Text>
             {expenseSettled ? (
               <Text style={styles.settleSettled}>Settled</Text>
             ) : (
-              <Text style={styles.settleAmount}>
-                {formatExpenseMoney(settleAmountCents ?? yourShareCents, expenseGroup.currency)}
-              </Text>
+              <View style={styles.settleAmountBlock}>
+                <Text style={styles.settleAmount}>
+                  {formatExpenseMoney(settleAmountCents ?? yourShareCents, expenseGroup.currency)}
+                </Text>
+                {settleAmountCents != null && settleAmountCents < yourShareCents ? (
+                  <Text style={styles.settleOriginalShare}>
+                    of {formatExpenseMoney(yourShareCents, expenseGroup.currency)} share
+                  </Text>
+                ) : null}
+              </View>
             )}
           </View>
         ) : null}
@@ -940,6 +1004,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
+  previewPaymentMeta: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
   cancelButton: {
     marginTop: spacing.sm,
   },
@@ -971,6 +1040,13 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: colors.text,
+  },
+  settleAmountBlock: {
+    gap: 2,
+  },
+  settleOriginalShare: {
+    fontSize: 13,
+    color: colors.textSecondary,
   },
   settleSettled: {
     fontSize: 16,

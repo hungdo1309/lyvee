@@ -187,14 +187,18 @@ export default function ExpenseGroupDetailScreen() {
 
   const handleDeleteExpense = (expense: Expense) => {
     if (!expenseGroup || !user) return;
-    appAlert('Delete expense?', `"${expense.description}" will be removed.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => void deleteExpense(expenseGroup, expense.id, user.id),
-      },
-    ]);
+    appAlert(
+      'Delete expense?',
+      `"${expense.description}" will be removed. Balances and what people still owe stay the same.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => void deleteExpense(expenseGroup, expense.id, user.id),
+        },
+      ]
+    );
   };
 
   const openAddExpense = () => {
@@ -248,6 +252,35 @@ export default function ExpenseGroupDetailScreen() {
           settlements
         )
       : false;
+
+  const viewingExpenseShareRemainingByUserId = useMemo(() => {
+    if (!editingExpense || !expenseGroup || !editorReadOnly) return null;
+
+    const portions = computeExpensePortionsCents(
+      editingExpense,
+      expenseGroup.memberIds
+    );
+    const remainingByUserId = new Map<string, number>();
+
+    for (const [memberId, shareCents] of portions) {
+      if (memberId === editingExpense.paidByUserId || shareCents <= 0) {
+        remainingByUserId.set(memberId, 0);
+        continue;
+      }
+      remainingByUserId.set(
+        memberId,
+        getUserExpenseShareRemainingCents(
+          editingExpense,
+          memberId,
+          expenseGroup.memberIds,
+          expenses,
+          settlements
+        )
+      );
+    }
+
+    return remainingByUserId;
+  }, [editingExpense, expenseGroup, editorReadOnly, expenses, settlements]);
 
   const handleSettleExpense = async (amountCents: number) => {
     if (
@@ -415,6 +448,35 @@ export default function ExpenseGroupDetailScreen() {
       expenseGroup != null &&
       !isUserInvolvedInExpense(expense, user.id, expenseGroup.memberIds);
 
+    const viewerShareCents =
+      user != null && expenseGroup != null
+        ? getUserExpenseShareCents(expense, user.id, expenseGroup.memberIds)
+        : null;
+    const viewerRemainingCents =
+      user != null && expenseGroup != null && viewerShareCents != null
+        ? getUserExpenseShareRemainingCents(
+            expense,
+            user.id,
+            expenseGroup.memberIds,
+            expenses,
+            settlements
+          )
+        : null;
+
+    let amountLabel = formatExpenseMoney(expense.amountCents, expenseGroup!.currency);
+    let amountStyle = styles.expenseAmount;
+    if (fullySettled) {
+      amountLabel = 'Settled';
+      amountStyle = styles.expenseSettled;
+    } else if (viewerShareCents != null && viewerRemainingCents != null) {
+      if (viewerRemainingCents <= 0) {
+        amountLabel = 'Your share settled';
+        amountStyle = styles.expenseSettled;
+      } else {
+        amountLabel = `You owe ${formatExpenseMoney(viewerRemainingCents, expenseGroup!.currency)}`;
+      }
+    }
+
     return (
       <Card
         key={expense.id}
@@ -431,16 +493,13 @@ export default function ExpenseGroupDetailScreen() {
               {memberNameById.get(expense.paidByUserId) ?? 'Member'}
             </Text>
             <Text style={styles.expenseSplit}>{formatExpenseSplitSummary(expense)}</Text>
+            <Text style={styles.expenseMeta}>
+              Total {formatExpenseMoney(expense.amountCents, expenseGroup!.currency)}
+            </Text>
             {notInvolved ? <Text style={styles.notInvolved}>Not involved</Text> : null}
           </View>
           <View style={styles.expenseRight}>
-            {fullySettled ? (
-              <Text style={styles.expenseSettled}>Settled</Text>
-            ) : (
-              <Text style={styles.expenseAmount}>
-                {formatExpenseMoney(expense.amountCents, expenseGroup!.currency)}
-              </Text>
-            )}
+            <Text style={amountStyle}>{amountLabel}</Text>
             {canEdit ? (
               <TouchableOpacity
                 onPress={() => handleDeleteExpense(expense)}
@@ -644,6 +703,7 @@ export default function ExpenseGroupDetailScreen() {
             : null
         }
         expenseSettled={editorReadOnly ? viewingExpenseSettled : false}
+        shareRemainingByUserId={viewingExpenseShareRemainingByUserId}
         onClose={closeExpenseEditor}
         onSave={async (values) => {
           if (!user) return;

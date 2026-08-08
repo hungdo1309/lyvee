@@ -24,8 +24,7 @@ import { useGroupMembers } from '../../../src/hooks/useGroupMembers';
 import { useGroupExpenseSettleData } from '../../../src/hooks/useGroupExpenseSettleData';
 import { HomeUnsettledExpensesSection } from '../../../src/components/HomeUnsettledExpensesSection';
 import { toggleItemComplete, deleteItem } from '../../../src/services/items';
-import { canManageGroup } from '../../../src/utils/groupRoles';
-import { buildHomeSettleExpenseEntries } from '../../../src/utils/homeSettleExpenses';
+import { buildHomePersonDebtEntries } from '../../../src/utils/homeSettleExpenses';
 import { collectTagsFromItems } from '../../../src/utils/tags';
 import { formatAssigneeLabel, canUserCompleteTask } from '../../../src/utils/assignees';
 import { formatOverdueSectionHeader, formatUpcomingDayHeader } from '../../../src/utils/dates';
@@ -79,10 +78,6 @@ export default function HomeScreen() {
   const { visibleExpenseGroups, expensesByGroupId, settlementsByGroupId, loading: expenseSettleLoading, refreshExpenseSettleData } =
     useGroupExpenseSettleData(activeGroup, user?.id, groupExpenseGroups, groupTrips);
 
-  const isGroupManager = Boolean(
-    activeGroup && user && canManageGroup(activeGroup, user.id)
-  );
-
   const memberNameById = useMemo(() => {
     const map = new Map<string, string>();
     for (const member of groupMembers) {
@@ -92,9 +87,8 @@ export default function HomeScreen() {
   }, [groupMembers]);
 
   const unsettledExpenseEntries = useMemo(() => {
-    if (!activeGroup || !user) return [];
-    return buildHomeSettleExpenseEntries(
-      activeGroup,
+    if (!user) return [];
+    return buildHomePersonDebtEntries(
       user.id,
       visibleExpenseGroups,
       expensesByGroupId,
@@ -102,13 +96,23 @@ export default function HomeScreen() {
       groupTrips
     );
   }, [
-    activeGroup,
     user,
     visibleExpenseGroups,
     expensesByGroupId,
     settlementsByGroupId,
     groupTrips,
   ]);
+
+  const handlePersonSettled = (expenseGroupIds: string[]) => {
+    const uniqueIds = [...new Set(expenseGroupIds)];
+    if (uniqueIds.length === 0) {
+      refreshExpenseSettleData();
+      return;
+    }
+    for (const expenseGroupId of uniqueIds) {
+      refreshExpenseSettleData(expenseGroupId);
+    }
+  };
 
   const availableTags = useMemo(
     () => collectTagsFromItems(groupItems),
@@ -320,8 +324,9 @@ export default function HomeScreen() {
                 entries={unsettledExpenseEntries}
                 memberNameById={memberNameById}
                 viewerUserId={user.id}
-                isManager={isGroupManager}
-                onSettled={refreshExpenseSettleData}
+                expensesByGroupId={expensesByGroupId}
+                settlementsByGroupId={settlementsByGroupId}
+                onSettled={handlePersonSettled}
               />
             ) : null}
 

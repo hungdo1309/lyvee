@@ -26,6 +26,7 @@ import { BalanceTransfer } from '../../../../src/utils/expenseBalances';
 import { Expense, ExpenseGroup, ExpenseSettlement } from '../../../../src/types/expenses';
 import { Trip } from '../../../../src/types/trips';
 import { formatExpenseMoney } from '../../../../src/utils/expenseMoney';
+import { allocateSettlementToExpenses } from '../../../../src/utils/expenseSplits';
 import { canViewExpenseGroup } from '../../../../src/utils/expensePermissions';
 import { colors, layout, spacing, typography } from '../../../../src/constants/theme';
 
@@ -151,16 +152,33 @@ export default function ExpenseBalancesScreen() {
     setRecordingTransferKey(key);
     setSettleError(null);
     try {
-      await addSettlement(
-        expenseGroup,
-        {
-          fromUserId: pendingSettleTransfer.fromUserId,
-          toUserId: pendingSettleTransfer.toUserId,
-          amountCents,
-          settlementDate: format(startOfDay(new Date()), 'yyyy-MM-dd'),
-        },
-        user.id
+      const settlementDate = format(startOfDay(new Date()), 'yyyy-MM-dd');
+      const allocations = allocateSettlementToExpenses(
+        expenses,
+        expenseGroup.memberIds,
+        settlements,
+        pendingSettleTransfer.fromUserId,
+        pendingSettleTransfer.toUserId,
+        amountCents
       );
+
+      if (allocations.length === 0) {
+        throw new Error('No open expenses found for this payment');
+      }
+
+      for (const allocation of allocations) {
+        await addSettlement(
+          expenseGroup,
+          {
+            expenseId: allocation.expenseId,
+            fromUserId: pendingSettleTransfer.fromUserId,
+            toUserId: pendingSettleTransfer.toUserId,
+            amountCents: allocation.amountCents,
+            settlementDate,
+          },
+          user.id
+        );
+      }
       setPendingSettleTransfer(null);
     } catch (error) {
       setSettleError(error instanceof Error ? error.message : 'Failed to record payment');

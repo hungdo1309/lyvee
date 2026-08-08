@@ -356,6 +356,43 @@ export function computeOpenExpenseDebtSlices(
   );
 }
 
+export interface ExpenseSettlementAllocation {
+  expenseId: string;
+  amountCents: number;
+}
+
+/**
+ * Split a person-to-person payment across open expense slices oldest-first
+ * (same order as unlinked settlement application / Balances partial hint).
+ */
+export function allocateSettlementToExpenses(
+  expenses: Expense[],
+  groupMemberIds: string[],
+  settlements: ExpenseSettlementRef[],
+  fromUserId: string,
+  toUserId: string,
+  amountCents: number
+): ExpenseSettlementAllocation[] {
+  if (amountCents <= 0) return [];
+
+  const openSlices = computeOpenExpenseDebtSlices(expenses, groupMemberIds, settlements).filter(
+    (slice) => slice.debtorUserId === fromUserId && slice.payerUserId === toUserId
+  );
+
+  let remaining = amountCents;
+  const allocations: ExpenseSettlementAllocation[] = [];
+
+  for (const slice of openSlices) {
+    if (remaining <= 0) break;
+    const chunk = Math.min(slice.remainingCents, remaining);
+    if (chunk <= 0) continue;
+    allocations.push({ expenseId: slice.expenseId, amountCents: chunk });
+    remaining -= chunk;
+  }
+
+  return allocations;
+}
+
 function computeExpenseDebtRemainingByExpenseId(
   expenses: Expense[],
   groupMemberIds: string[],

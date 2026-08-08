@@ -10,6 +10,7 @@ import {
   limit,
   onSnapshot,
   deleteField,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import {
@@ -25,6 +26,10 @@ import {
 } from '../types/expenses';
 import { Trip } from '../types/trips';
 import { stripUndefined } from '../utils/firestore';
+import {
+  computeMemberBalances,
+  simplifyBalanceTransfers,
+} from '../utils/expenseBalances';
 import {
   canDeleteExpenseGroup,
   canEditExpenseGroup,
@@ -902,6 +907,11 @@ export async function updateExpense(
   await notifyExpenseUpdated(expenseGroup, before, normalized, userId, trip);
 }
 
+/**
+ * Hard-deletes an expense without changing who owes whom.
+ * Removes the expense and its linked settlements, then writes balance-adjustment
+ * settlements so member nets match what they were before the delete.
+ */
 export async function deleteExpense(
   expenseGroup: ExpenseGroup,
   expenseId: string,
@@ -927,13 +937,83 @@ export async function deleteExpense(
     existingSnap.data() as Record<string, unknown>
   );
 
-  await deleteDoc(expenseRef);
-  await setDoc(
+  const [allExpenses, allSettlements] = await Promise.all([
+    fetchExpenseGroupExpensesOnce(expenseGroup.id),
+    fetchExpenseGroupSettlementsOnce(expenseGroup.id),
+  ]);
+
+  const beforeBalances = computeMemberBalances(
+    expenseGroup,
+    allExpenses,
+    allSettlements
+  );
+
+  const linkedSettlements = allSettlements.filter(
+    (settlement) => settlement.expenseId === expenseId
+  );
+  const remainingExpenses = allExpenses.filter((entry) => entry.id !== expenseId);
+  const remainingSettlements = allSettlements.filter(
+    (settlement) => settlement.expenseId !== expenseId
+  );
+
+  const afterBalances = computeMemberBalances(
+    expenseGroup,
+    remainingExpenses,
+    remainingSettlements
+  );
+
+  const balanceDeltas = expenseGroup.memberIds.map((memberId) => ({
+    userId: memberId,
+    netCents:
+      (beforeBalances.find((entry) => entry.userId === memberId)?.netCents ?? 0) -
+      (afterBalances.find((entry) => entry.userId === memberId)?.netCents ?? 0),
+  }));
+
+  // simplify gives debtor→creditor transfers for the delta nets; settlements move
+  // nets the opposite way of "from paid to", so swap endpoints to restore balances.
+  const restoreTransfers = simplifyBalanceTransfers(balanceDeltas);
+  const settlementDate = new Date().toISOString().slice(0, 10);
+  const now = new Date().toISOString();
+  const noteBase = `Balance kept after removing "${expense.description}"`;
+  const restoreNote =
+    noteBase.length <= MAX_SETTLEMENT_NOTE_LENGTH
+      ? noteBase
+      : `${noteBase.slice(0, MAX_SETTLEMENT_NOTE_LENGTH - 1)}…`;
+
+  const batch = writeBatch(db);
+  batch.delete(expenseRef);
+
+  for (const settlement of linkedSettlements) {
+    batch.delete(
+      doc(db, 'expenseGroups', expenseGroup.id, 'settlements', settlement.id)
+    );
+  }
+
+  for (const transfer of restoreTransfers) {
+    if (transfer.amountCents <= 0) continue;
+    const id = doc(collection(db, 'expenseGroups', expenseGroup.id, 'settlements')).id;
+    batch.set(
+      doc(db, 'expenseGroups', expenseGroup.id, 'settlements', id),
+      stripUndefined({
+        fromUserId: transfer.toUserId,
+        toUserId: transfer.fromUserId,
+        amountCents: transfer.amountCents,
+        settlementDate,
+        note: restoreNote,
+        createdBy: userId,
+        createdAt: now,
+        updatedAt: now,
+      })
+    );
+  }
+
+  batch.set(
     doc(db, 'expenseGroups', expenseGroup.id),
-    { updatedAt: new Date().toISOString() },
+    { updatedAt: now },
     { merge: true }
   );
 
+  await batch.commit();
   await notifyExpenseDeleted(expenseGroup, expense, userId, trip);
 }
 

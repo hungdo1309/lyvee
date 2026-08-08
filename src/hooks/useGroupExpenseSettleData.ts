@@ -9,6 +9,11 @@ import {
 } from '../services/expenseGroups';
 import { filterVisibleExpenseGroups } from '../utils/expensePermissions';
 
+/**
+ * One-shot expense/settlement reads for Home Unsettled.
+ * Keeps the last successful fetch when leaving Home and refreshes in the
+ * background on focus so the section can render immediately from cache.
+ */
 export function useGroupExpenseSettleData(
   group: Group | null,
   userId: string | undefined,
@@ -46,6 +51,12 @@ export function useGroupExpenseSettleData(
             next.set(expenseGroupId, settlements);
             return next;
           });
+          setLoadedGroupIds((current) => {
+            if (current.has(expenseGroupId)) return current;
+            const next = new Set(current);
+            next.add(expenseGroupId);
+            return next;
+          });
         })
         .catch((error) => {
           console.warn('[useGroupExpenseSettleData] refresh group:', error);
@@ -70,17 +81,29 @@ export function useGroupExpenseSettleData(
     return expenseGroups.filter((entry) => visibleIds.has(entry.id));
   }, [visibleExpenseGroupIdsKey, expenseGroups, group, userId]);
 
+  // Drop cache when signed out / no active group.
   useEffect(() => {
-    if (!isFocused || visibleExpenseGroupIdsKey === '') {
-      setExpensesByGroupId((current) => (current.size === 0 ? current : new Map()));
-      setSettlementsByGroupId((current) => (current.size === 0 ? current : new Map()));
-      setLoadedGroupIds((current) => (current.size === 0 ? current : new Set()));
+    if (group && userId) return;
+    setExpensesByGroupId(new Map());
+    setSettlementsByGroupId(new Map());
+    setLoadedGroupIds(new Set());
+  }, [group, userId]);
+
+  useEffect(() => {
+    if (!isFocused) {
+      // Keep last fetch so Home can paint immediately on return.
+      return;
+    }
+
+    if (visibleExpenseGroupIdsKey === '') {
+      setExpensesByGroupId(new Map());
+      setSettlementsByGroupId(new Map());
+      setLoadedGroupIds(new Set());
       return;
     }
 
     const expenseGroupIds = visibleExpenseGroupIdsKey.split(',');
     let cancelled = false;
-    setLoadedGroupIds(new Set());
 
     void Promise.all(
       expenseGroupIds.map(async (expenseGroupId) => {
@@ -110,11 +133,7 @@ export function useGroupExpenseSettleData(
       })
       .catch((error) => {
         console.warn('[useGroupExpenseSettleData] fetch:', error);
-        if (!cancelled) {
-          setExpensesByGroupId(new Map());
-          setSettlementsByGroupId(new Map());
-          setLoadedGroupIds(new Set());
-        }
+        // Keep existing cache on failure so Unsettled does not disappear.
       });
 
     return () => {
@@ -122,12 +141,11 @@ export function useGroupExpenseSettleData(
     };
   }, [isFocused, visibleExpenseGroupIdsKey, refreshKey]);
 
-  const visibleExpenseGroupCount = visibleExpenseGroupIdsKey
-    ? visibleExpenseGroupIdsKey.split(',').length
-    : 0;
-
-  const loading =
-    visibleExpenseGroupCount > 0 && loadedGroupIds.size < visibleExpenseGroupCount;
+  const loading = useMemo(() => {
+    if (!visibleExpenseGroupIdsKey) return false;
+    const expenseGroupIds = visibleExpenseGroupIdsKey.split(',');
+    return !expenseGroupIds.every((id) => loadedGroupIds.has(id));
+  }, [visibleExpenseGroupIdsKey, loadedGroupIds]);
 
   return {
     visibleExpenseGroups,
