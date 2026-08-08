@@ -8,7 +8,7 @@ export function getNativeBuildNumber(): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** Marketing version from the binary / app config (e.g. "1.2.0"). */
+/** Marketing version from the binary / app config (e.g. "1.0.0"). */
 export function getAppVersion(): string {
   return (
     Constants.nativeApplicationVersion ||

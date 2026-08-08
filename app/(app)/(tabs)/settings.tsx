@@ -20,7 +20,7 @@ import { GOOGLE_SIGNIN_UNAVAILABLE_MESSAGE } from '../../../src/utils/googleSign
 export default function SettingsScreen() {
   const { user, firebaseUser, linkedProviders, linkGoogle, logout } = useAuth();
   const [linkingGoogle, setLinkingGoogle] = useState(false);
-  const appVersion = Constants.expoConfig?.version ?? '1.2.0';
+  const appVersion = Constants.expoConfig?.version ?? '1.0.0';
   const memberSince = formatMemberSince(
     user?.createdAt ?? firebaseUser?.metadata.creationTime ?? ''
   );
