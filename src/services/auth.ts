@@ -7,28 +7,62 @@ import {
   onAuthStateChanged,
   EmailAuthProvider,
   GoogleAuthProvider,
+  OAuthProvider,
   reauthenticateWithCredential,
   updateEmail,
   updatePassword,
+  updateProfile,
   sendPasswordResetEmail,
   fetchSignInMethodsForEmail,
   type AuthCredential,
   User as FirebaseUser,
 } from 'firebase/auth';
 import { Platform } from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { configureGoogleSignIn } from '../config/googleSignIn';
 import {
   getGoogleSignInModule,
-  GOOGLE_SIGNIN_UNAVAILABLE_MESSAGE,
 } from '../utils/googleSignInNative';
+import {
+  formatAppleFullName,
+  generateAppleNonce,
+  hashAppleNonce,
+  isAppleSignInAvailable,
+  type AppleSignInNonce,
+} from '../utils/appleSignIn';
 import { User } from '../types';
 
+export type AuthIntent = 'signIn' | 'signUp';
+
+function authAction(intent: AuthIntent): string {
+  return intent === 'signUp' ? 'Sign up' : 'Sign in';
+}
+
+function authActionLower(intent: AuthIntent): string {
+  return intent === 'signUp' ? 'sign up' : 'sign in';
+}
+
+function googleProviderLabel(intent: AuthIntent): string {
+  return `${authAction(intent)} with Google`;
+}
+
+function appleProviderLabel(intent: AuthIntent): string {
+  return intent === 'signUp' ? 'Sign up with Apple' : 'Sign in with Apple';
+}
+
 export class GoogleSignInCancelledError extends Error {
-  constructor() {
-    super('Sign in cancelled');
+  constructor(intent: AuthIntent = 'signIn') {
+    super(`${authAction(intent)} cancelled`);
     this.name = 'GoogleSignInCancelledError';
+  }
+}
+
+export class AppleSignInCancelledError extends Error {
+  constructor(intent: AuthIntent = 'signIn') {
+    super(`${authAction(intent)} cancelled`);
+    this.name = 'AppleSignInCancelledError';
   }
 }
 
@@ -42,6 +76,20 @@ export class GoogleAccountLinkError extends Error {
   }
 }
 
+export class AppleAccountLinkError extends Error {
+  email: string;
+
+  constructor(email: string, intent: AuthIntent = 'signIn') {
+    super(
+      intent === 'signUp'
+        ? 'This email already has a LyVee account. Use Sign In with your password, or sign in with Apple if it is already linked to that account.'
+        : 'An account with this email already exists. Sign in with your password to link Apple.'
+    );
+    this.name = 'AppleAccountLinkError';
+    this.email = email;
+  }
+}
+
 let pendingGoogleCredential: AuthCredential | null = null;
 
 function getAuthErrorCode(error: unknown): string {
@@ -51,7 +99,7 @@ function getAuthErrorCode(error: unknown): string {
   return '';
 }
 
-function mapAuthError(error: unknown): string {
+function mapAuthError(error: unknown, intent: AuthIntent = 'signIn'): string {
   const code = getAuthErrorCode(error);
 
   switch (code) {
@@ -61,6 +109,7 @@ function mapAuthError(error: unknown): string {
       return 'This account has been disabled';
     case 'auth/user-not-found':
     case 'auth/wrong-password':
+      return 'Incorrect email or password';
     case 'auth/invalid-credential':
       return 'Incorrect email or password';
     case 'auth/email-already-in-use':
@@ -72,15 +121,45 @@ function mapAuthError(error: unknown): string {
     case 'auth/requires-recent-login':
       return 'Please sign in again with your current password';
     case 'auth/operation-not-allowed':
-      return 'This change is not allowed for your account';
+      return `${appleProviderLabel(intent)} is not enabled for this app yet. Try again after an app update, or contact support.`;
+    case 'auth/missing-or-invalid-nonce':
+      return `${appleProviderLabel(intent)} failed security validation. Close the app and try again.`;
     case 'auth/provider-already-linked':
-      return 'Google is already linked to this account';
+      return 'This sign-in method is already linked to your account';
     case 'auth/credential-already-in-use':
-      return 'This Google account is already linked to another user';
+      return 'This account is already linked to another user';
     case 'auth/account-exists-with-different-credential':
       return 'An account with this email already exists with a different sign-in method';
     default:
       return error instanceof Error ? error.message : 'Authentication failed';
+  }
+}
+
+function mapAppleAuthError(error: unknown, intent: AuthIntent = 'signIn'): string {
+  const code = getAuthErrorCode(error);
+
+  switch (code) {
+    case 'auth/operation-not-allowed':
+      return `${appleProviderLabel(intent)} is not enabled in Firebase yet. Enable Apple under Authentication → Sign-in method.`;
+    case 'auth/missing-or-invalid-nonce':
+      return `${appleProviderLabel(intent)} failed security validation. Close the app completely and try again.`;
+    case 'auth/invalid-credential':
+    case 'auth/user-disabled':
+      return `${appleProviderLabel(intent)} could not be verified. In Firebase → Apple, set Services ID to your iOS bundle ID (com.lyvee.app), not the web Services ID. Also confirm Team ID, Key ID, and private key.`;
+    case 'auth/account-exists-with-different-credential':
+    case 'auth/email-already-in-use':
+    case 'auth/credential-already-in-use':
+      return 'An account with this email already exists. Use Sign In instead, or sign in with email and link Apple in Settings.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Wait a few minutes and try again.';
+    default: {
+      const message = error instanceof Error ? error.message : '';
+      if (message.includes('permission') || code === 'permission-denied') {
+        return 'Could not save your LyVee profile. Check your connection and try again.';
+      }
+      if (message) return message;
+      return `${appleProviderLabel(intent)} failed. Try again in a moment.`;
+    }
   }
 }
 
@@ -103,18 +182,36 @@ export function clearUserProfileCache(userId?: string): void {
   profileInflight.clear();
 }
 
-export async function ensureUserProfile(fbUser: FirebaseUser): Promise<User> {
+export async function ensureUserProfile(
+  fbUser: FirebaseUser,
+  options?: { preferredName?: string | null }
+): Promise<User> {
   const existing = await getUserProfile(fbUser.uid);
-  if (existing) return existing;
+  if (existing) {
+    const preferredName = options?.preferredName?.trim();
+    if (
+      preferredName &&
+      (!existing.name.trim() || existing.name === existing.email.split('@')[0])
+    ) {
+      const updated = { ...existing, name: preferredName };
+      await updateDoc(doc(db, 'users', existing.id), { name: preferredName });
+      return cacheUserProfile(existing.id, updated) as User;
+    }
+    return existing;
+  }
 
   const user: User = {
     id: fbUser.uid,
-    name: fbUser.displayName ?? fbUser.email?.split('@')[0] ?? 'User',
+    name:
+      options?.preferredName?.trim() ||
+      fbUser.displayName ||
+      fbUser.email?.split('@')[0] ||
+      'User',
     email: fbUser.email ?? '',
     createdAt: new Date().toISOString(),
   };
   await setDoc(doc(db, 'users', user.id), user);
-  return user;
+  return cacheUserProfile(user.id, user) as User;
 }
 
 export async function signUp(
@@ -168,6 +265,10 @@ async function getPasswordSignInHelpMessage(email: string): Promise<string> {
   try {
     const methods = await fetchSignInMethodsForEmail(auth, email);
 
+    if (methods.includes('apple.com') && !methods.includes('password')) {
+      return 'This account uses Sign in with Apple only. Use the Apple button on the login screen.';
+    }
+
     if (methods.includes('google.com') && !methods.includes('password')) {
       return 'This account uses Google Sign-In only. Tap "Sign in with Google", then add a password in Settings if you want both options.';
     }
@@ -208,13 +309,15 @@ export async function requestPasswordReset(email: string): Promise<void> {
   }
 }
 
-async function getGoogleSignInPayload(): Promise<{
+async function getGoogleSignInPayload(intent: AuthIntent = 'signIn'): Promise<{
   credential: AuthCredential;
   email: string;
 }> {
   const googleSignIn = getGoogleSignInModule();
   if (!googleSignIn) {
-    throw new Error(GOOGLE_SIGNIN_UNAVAILABLE_MESSAGE);
+    throw new Error(
+      `Google Sign-In requires a LyVee development or preview build to ${authActionLower(intent)}. It is not available in Expo Go.`
+    );
   }
 
   configureGoogleSignIn();
@@ -226,16 +329,16 @@ async function getGoogleSignInPayload(): Promise<{
 
   const response = await GoogleSignin.signIn();
   if (response.type === 'cancelled') {
-    throw new GoogleSignInCancelledError();
+    throw new GoogleSignInCancelledError(intent);
   }
 
   const idToken = response.data.idToken;
   const email = response.data.user.email?.trim();
   if (!idToken) {
-    throw new Error('Google sign-in did not return an ID token');
+    throw new Error(`${googleProviderLabel(intent)} did not return an ID token`);
   }
   if (!email) {
-    throw new Error('Google sign-in did not return an email address');
+    throw new Error(`${googleProviderLabel(intent)} did not return an email address`);
   }
 
   return {
@@ -256,8 +359,157 @@ function accountHasPasswordWithoutGoogle(methods: string[]): boolean {
   return methods.includes('password') && !methods.includes('google.com');
 }
 
-export async function signInWithGoogle(): Promise<User> {
-  const { credential, email } = await getGoogleSignInPayload();
+function accountHasPasswordWithoutApple(methods: string[]): boolean {
+  return methods.includes('password') && !methods.includes('apple.com');
+}
+
+export type AppleSignInPayload = {
+  credential: AuthCredential;
+  email: string | null;
+  fullName: string | null;
+};
+
+/** Opens Apple's system sheet (Face ID / account confirmation). Call directly from the button tap. */
+export async function requestAppleSignInFromDevice(
+  intent: AuthIntent = 'signIn',
+  preparedNonce?: AppleSignInNonce
+): Promise<AppleSignInPayload> {
+  if (Platform.OS !== 'ios') {
+    throw new Error(`${appleProviderLabel(intent)} is only available on iPhone and iPad.`);
+  }
+
+  const rawNonce = preparedNonce?.raw ?? generateAppleNonce();
+  const hashedNonce =
+    preparedNonce?.hashed ?? (await hashAppleNonce(rawNonce));
+
+  let appleCredential: AppleAuthentication.AppleAuthenticationCredential;
+  try {
+    appleCredential = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
+      nonce: hashedNonce,
+    });
+  } catch (error: unknown) {
+    const code =
+      error && typeof error === 'object' && 'code' in error
+        ? String((error as { code: string }).code)
+        : '';
+    if (code === 'ERR_REQUEST_CANCELED' || code === 'ERR_CANCELED') {
+      throw new AppleSignInCancelledError(intent);
+    }
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(`${appleProviderLabel(intent)} could not start. Try again.`);
+  }
+
+  if (!appleCredential.identityToken) {
+    throw new Error(`${appleProviderLabel(intent)} did not return an identity token`);
+  }
+
+  const provider = new OAuthProvider('apple.com');
+  const credential = provider.credential({
+    idToken: appleCredential.identityToken,
+    rawNonce,
+  });
+
+  return {
+    credential,
+    email: appleCredential.email?.trim() || null,
+    fullName: formatAppleFullName(appleCredential.fullName),
+  };
+}
+
+export async function finishAppleSignIn(
+  { credential, email, fullName }: AppleSignInPayload,
+  intent: AuthIntent = 'signIn'
+): Promise<User> {
+  if (email) {
+    const existingMethods = await getExistingSignInMethods(email);
+    if (accountHasPasswordWithoutApple(existingMethods)) {
+      throw new AppleAccountLinkError(email, intent);
+    }
+  }
+
+  let signedIn = false;
+  try {
+    const result = await signInWithCredential(auth, credential);
+    signedIn = true;
+    if (fullName && !result.user.displayName) {
+      try {
+        await updateProfile(result.user, { displayName: fullName });
+      } catch {
+        // Non-blocking; profile name still lands in Firestore below.
+      }
+    }
+    await result.user.reload();
+    return ensureUserProfile(result.user, { preferredName: fullName });
+  } catch (error) {
+    if (signedIn) {
+      try {
+        await firebaseSignOut(auth);
+      } catch {
+        // Allow retry after a partial sign-in.
+      }
+    }
+    if (
+      getAuthErrorCode(error) === 'auth/account-exists-with-different-credential' ||
+      getAuthErrorCode(error) === 'auth/email-already-in-use'
+    ) {
+      throw new AppleAccountLinkError(email ?? 'this email', intent);
+    }
+    if (error instanceof AppleSignInCancelledError || error instanceof AppleAccountLinkError) {
+      throw error;
+    }
+    throw new Error(mapAppleAuthError(error, intent));
+  }
+}
+
+export async function signInWithApple(intent: AuthIntent = 'signIn'): Promise<User> {
+  const payload = await requestAppleSignInFromDevice(intent);
+  return finishAppleSignIn(payload, intent);
+}
+
+export async function linkAppleAccount(payload?: AppleSignInPayload): Promise<void> {
+  const fbUser = auth.currentUser;
+  if (!fbUser) throw new Error('Not signed in');
+
+  try {
+    const { credential, email } =
+      payload ?? (await requestAppleSignInFromDevice());
+
+    if (
+      email &&
+      fbUser.email &&
+      fbUser.email.toLowerCase() !== email.toLowerCase()
+    ) {
+      const existingMethods = await getExistingSignInMethods(email);
+      if (existingMethods.length > 0) {
+        throw new Error(
+          'This Apple ID uses a different email than your LyVee account. Sign out and sign in with Apple, or use the Apple ID that matches this account.'
+        );
+      }
+    }
+
+    await linkWithCredential(fbUser, credential);
+    clearUserProfileCache(fbUser.uid);
+    await fbUser.reload();
+  } catch (error) {
+    if (error instanceof AppleSignInCancelledError) {
+      throw error;
+    }
+    if (getAuthErrorCode(error) === 'auth/provider-already-linked') {
+      await fbUser.reload();
+      return;
+    }
+    throw new Error(mapAuthError(error));
+  }
+}
+
+export async function signInWithGoogle(intent: AuthIntent = 'signIn'): Promise<User> {
+  const { credential, email } = await getGoogleSignInPayload(intent);
   const existingMethods = await getExistingSignInMethods(email);
 
   // Never sign in with Google alone when a password account already exists for
@@ -283,7 +535,7 @@ export async function signInWithGoogle(): Promise<User> {
       throw new GoogleAccountLinkError(email);
     }
 
-    throw new Error(mapAuthError(error));
+    throw new Error(mapAuthError(error, intent));
   }
 }
 

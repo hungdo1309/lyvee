@@ -13,6 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   GoogleAccountLinkError,
   GoogleSignInCancelledError,
+  AppleAccountLinkError,
+  AppleSignInCancelledError,
   useAuth,
 } from '../../src/context/AuthContext';
 import { Input } from '../../src/components/Input';
@@ -20,17 +22,19 @@ import { Button } from '../../src/components/Button';
 import { AppLogoHeader } from '../../src/components/AppLogoHeader';
 import { AuthDivider } from '../../src/components/AuthDivider';
 import { GoogleSignInButton } from '../../src/components/GoogleSignInButton';
+import { AppleSignInButton } from '../../src/components/AppleSignInButton';
 import { RememberEmailCheckbox } from '../../src/components/RememberEmailCheckbox';
 import { colors, spacing, typography } from '../../src/constants/theme';
 import { isFirebaseConfigured } from '../../src/config/firebase';
 import { isGoogleSignInAvailable, isGoogleSignInConfigured } from '../../src/config/googleSignIn';
+import { isAppleSignInAvailable } from '../../src/utils/appleSignIn';
 import {
   loadRememberedEmail,
   persistRememberEmailPreference,
 } from '../../src/services/rememberedEmail';
 
 export default function LoginScreen() {
-  const { login, loginWithGoogle, linkGoogleWithPassword } = useAuth();
+  const { login, loginWithGoogle, completeAppleAuth, linkGoogleWithPassword } = useAuth();
   const { redirect, code } = useLocalSearchParams<{
     redirect?: string;
     code?: string;
@@ -39,10 +43,18 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const [linkEmail, setLinkEmail] = useState<string | null>(null);
   const [linkPassword, setLinkPassword] = useState('');
   const [rememberEmail, setRememberEmail] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; linkPassword?: string }>({});
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    isAppleSignInAvailable()
+      .then(setAppleAvailable)
+      .catch(() => setAppleAvailable(false));
+  }, []);
 
   useEffect(() => {
     loadRememberedEmail()
@@ -141,6 +153,33 @@ export default function LoginScreen() {
     } finally {
       setGoogleLoading(false);
     }
+  };
+
+  const beforeAppleSignIn = () => {
+    if (!isFirebaseConfigured()) {
+      appAlert(
+        'Firebase not configured',
+        'Copy .env.example to .env and add your Firebase credentials.'
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const handleAppleSignInError = (error: unknown) => {
+    if (error instanceof AppleSignInCancelledError) {
+      return;
+    }
+    if (error instanceof AppleAccountLinkError) {
+      appAlert(
+        'Account already exists',
+        'Sign in with your email and password, then link your Apple Account from Settings if you want both.'
+      );
+      return;
+    }
+    const message =
+      error instanceof Error ? error.message : 'Failed to sign in with Apple';
+    appAlert('Apple sign in failed', message);
   };
 
   const handleLinkGoogle = async () => {
@@ -265,14 +304,27 @@ export default function LoginScreen() {
                 />
               </View>
 
-              {isGoogleSignInConfigured() ? (
+              {isGoogleSignInConfigured() || appleAvailable ? (
                 <View style={styles.authActions}>
                   <AuthDivider />
-                  <GoogleSignInButton
-                    onPress={handleGoogleSignIn}
-                    loading={googleLoading}
-                    disabled={loading}
-                  />
+                  {appleAvailable ? (
+                    <AppleSignInButton
+                      beforeStart={beforeAppleSignIn}
+                      onAppleCredential={async (payload) => {
+                        const profile = await completeAppleAuth(payload, 'signIn');
+                        await navigateAfterAuth(profile.email);
+                      }}
+                      onAppleError={handleAppleSignInError}
+                      disabled={loading || googleLoading}
+                    />
+                  ) : null}
+                  {isGoogleSignInConfigured() ? (
+                    <GoogleSignInButton
+                      onPress={handleGoogleSignIn}
+                      loading={googleLoading}
+                      disabled={loading}
+                    />
+                  ) : null}
                 </View>
               ) : null}
             </>

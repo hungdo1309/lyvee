@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Linking } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Linking, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { appAlert } from '../../../src/utils/dialog';
 import { router, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { GoogleSignInCancelledError, useAuth } from '../../../src/context/AuthContext';
+import {
+  AppleSignInCancelledError,
+  GoogleSignInCancelledError,
+  useAuth,
+} from '../../../src/context/AuthContext';
 import { Button } from '../../../src/components/Button';
 import { Card } from '../../../src/components/Card';
 import { InfoRow, SectionCard } from '../../../src/components/SectionCard';
@@ -14,19 +18,31 @@ import { APP_NAME } from '../../../src/constants/app';
 import { LEGAL_CONTACT_EMAIL } from '../../../src/constants/legalMeta';
 import { getNameInitials } from '../../../src/utils/names';
 import { formatMemberSince } from '../../../src/utils/dates';
+import { isFirebaseConfigured } from '../../../src/config/firebase';
 import { isGoogleSignInAvailable, isGoogleSignInConfigured } from '../../../src/config/googleSignIn';
 import { GOOGLE_SIGNIN_UNAVAILABLE_MESSAGE } from '../../../src/utils/googleSignInNative';
+import { isAppleSignInAvailable } from '../../../src/utils/appleSignIn';
 
 export default function SettingsScreen() {
-  const { user, firebaseUser, linkedProviders, linkGoogle, logout } = useAuth();
+  const { user, firebaseUser, linkedProviders, linkGoogle, linkApple, logout } = useAuth();
   const [linkingGoogle, setLinkingGoogle] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
   const memberSince = formatMemberSince(
     user?.createdAt ?? firebaseUser?.metadata.creationTime ?? ''
   );
-  const { hasPassword, hasGoogle } = linkedProviders;
+  const { hasPassword, hasGoogle, hasApple } = linkedProviders;
   const showGoogleSection = isGoogleSignInConfigured();
   const showGoogleLink = showGoogleSection && !hasGoogle;
+  const showAppleLink = appleAvailable && !hasApple;
+  const showProviderStatus = showGoogleSection || appleAvailable;
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    isAppleSignInAvailable()
+      .then(setAppleAvailable)
+      .catch(() => setAppleAvailable(false));
+  }, []);
 
   const handleLinkGoogle = async () => {
     if (!isGoogleSignInAvailable()) {
@@ -48,6 +64,30 @@ export default function SettingsScreen() {
       );
     } finally {
       setLinkingGoogle(false);
+    }
+  };
+
+  const handleLinkApple = async () => {
+    if (!isFirebaseConfigured()) {
+      appAlert(
+        'Firebase not configured',
+        'Copy .env.example to .env and add your Firebase credentials.'
+      );
+      return;
+    }
+
+    try {
+      // Do not setState before Apple sign-in — iOS requires signInAsync from the tap gesture.
+      await linkApple();
+      appAlert('Apple linked', 'You can now sign in with your Apple Account on this account.');
+    } catch (error: unknown) {
+      if (error instanceof AppleSignInCancelledError) {
+        return;
+      }
+      appAlert(
+        'Could not link Apple',
+        error instanceof Error ? error.message : 'Failed to link your Apple Account'
+      );
     }
   };
 
@@ -145,19 +185,22 @@ export default function SettingsScreen() {
               title="Change Password"
               variant="secondary"
               onPress={() => router.push('/(app)/change-password' as Href)}
-              style={showGoogleSection ? styles.accountButton : undefined}
-            />
+            style={showProviderStatus ? styles.accountButton : undefined}
+          />
           </>
         ) : (
           <Button
             title="Restore Password"
             variant="secondary"
             onPress={() => router.push('/(app)/set-password' as Href)}
-            style={showGoogleSection ? styles.accountButton : undefined}
+            style={showProviderStatus ? styles.accountButton : undefined}
           />
         )}
         {showGoogleSection && hasGoogle ? (
           <Text style={styles.googleLinkedStatus}>Google Account Linked</Text>
+        ) : null}
+        {appleAvailable && hasApple ? (
+          <Text style={styles.googleLinkedStatus}>Apple Account Linked</Text>
         ) : null}
         {showGoogleLink ? (
           <Button
@@ -165,6 +208,15 @@ export default function SettingsScreen() {
             variant="secondary"
             onPress={handleLinkGoogle}
             loading={linkingGoogle}
+            preserveTitle
+            style={styles.accountButton}
+          />
+        ) : null}
+        {showAppleLink ? (
+          <Button
+            title="Link your Apple Account"
+            variant="secondary"
+            onPress={handleLinkApple}
             preserveTitle
             style={styles.accountButton}
           />

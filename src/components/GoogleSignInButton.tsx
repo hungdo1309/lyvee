@@ -16,6 +16,8 @@ interface GoogleSignInButtonProps {
   style?: StyleProp<ViewStyle>;
   /** Official Google styles: light (white + border) or dark (dark pill). */
   variant?: 'light' | 'dark';
+  /** Use signUp on the create-account screen. */
+  type?: 'signIn' | 'signUp';
 }
 
 const GOOGLE_G_LOGO =
@@ -27,9 +29,11 @@ export function GoogleSignInButton({
   disabled = false,
   style,
   variant = 'light',
+  type = 'signIn',
 }: GoogleSignInButtonProps) {
   const isDisabled = disabled || loading;
   const isDark = variant === 'dark';
+  const label = type === 'signUp' ? 'Sign up with Google' : 'Sign in with Google';
 
   return (
     <TouchableOpacity
@@ -42,16 +46,14 @@ export function GoogleSignInButton({
       onPress={onPress}
       disabled={isDisabled}
       activeOpacity={0.7}
-      accessibilityLabel="Sign in with Google"
+      accessibilityLabel={label}
     >
       {loading ? (
         <ActivityIndicator color={isDark ? '#FFFFFF' : '#1F1F1F'} />
       ) : (
         <View style={styles.content}>
           <Image source={{ uri: GOOGLE_G_LOGO }} style={styles.logo} />
-          <Text style={[styles.label, isDark && styles.labelDark]}>
-            Sign in with Google
-          </Text>
+          <Text style={[styles.label, isDark && styles.labelDark]}>{label}</Text>
         </View>
       )}
     </TouchableOpacity>
@@ -62,7 +64,7 @@ const styles = StyleSheet.create({
   button: {
     width: '100%',
     height: 48,
-    borderRadius: 4,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
@@ -88,8 +90,9 @@ const styles = StyleSheet.create({
     height: 20,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
+    // Match AppleAuthenticationButton label size at height 48.
+    fontSize: 16,
+    fontWeight: '600',
     color: '#1F1F1F',
     textAlign: 'center',
   },

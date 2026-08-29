@@ -17,6 +17,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.lyvee.app",
       "buildNumber": "4",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSUserNotificationsUsageDescription": "LyVee sends reminders for tasks, activities, and document expirations.",
@@ -71,6 +72,7 @@
       ],
       "expo-router",
       "expo-secure-store",
+      "expo-apple-authentication",
       [
         "expo-notifications",
         {

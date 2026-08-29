@@ -18,12 +18,19 @@ import {
   changeUserEmail,
   changeUserPassword,
   signInWithGoogle,
+  signInWithApple,
+  finishAppleSignIn,
   linkGoogleWithPassword,
   linkGoogleAccount,
+  linkAppleAccount,
   addPasswordToAccount,
   clearPendingGoogleCredential,
   GoogleSignInCancelledError,
   GoogleAccountLinkError,
+  AppleSignInCancelledError,
+  AppleAccountLinkError,
+  type AuthIntent,
+  type AppleSignInPayload,
 } from '../services/auth';
 import { clearActiveGroupSession } from '../services/session';
 import { getLinkedAuthProviders, type LinkedAuthProviders } from '../utils/authProviders';
@@ -36,9 +43,17 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<User>;
   register: (email: string, password: string, name: string) => Promise<User>;
-  loginWithGoogle: () => Promise<User>;
+  loginWithGoogle: (intent?: AuthIntent) => Promise<User>;
+  loginWithApple: (intent?: AuthIntent) => Promise<User>;
+  signUpWithGoogle: () => Promise<User>;
+  signUpWithApple: () => Promise<User>;
+  completeAppleAuth: (
+    payload: AppleSignInPayload,
+    intent?: AuthIntent
+  ) => Promise<User>;
   linkGoogleWithPassword: (email: string, password: string) => Promise<User>;
   linkGoogle: () => Promise<void>;
+  linkApple: () => Promise<void>;
   setPassword: (email: string, password: string) => Promise<void>;
   changeEmail: (newEmail: string, currentPassword: string) => Promise<User>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
@@ -47,7 +62,12 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export { GoogleSignInCancelledError, GoogleAccountLinkError };
+export {
+  GoogleSignInCancelledError,
+  GoogleAccountLinkError,
+  AppleSignInCancelledError,
+  AppleAccountLinkError,
+};
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -111,12 +131,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  const loginWithGoogle = useCallback(async () => {
-    const profile = await signInWithGoogle();
+  const loginWithGoogle = useCallback(async (intent: AuthIntent = 'signIn') => {
+    const profile = await signInWithGoogle(intent);
     await clearActiveGroupSession(profile.id);
     setUser(profile);
     return profile;
   }, []);
+
+  const loginWithApple = useCallback(async (intent: AuthIntent = 'signIn') => {
+    const profile = await signInWithApple(intent);
+    await clearActiveGroupSession(profile.id);
+    setUser(profile);
+    return profile;
+  }, []);
+
+  const signUpWithGoogle = useCallback(
+    () => loginWithGoogle('signUp'),
+    [loginWithGoogle]
+  );
+
+  const signUpWithApple = useCallback(
+    () => loginWithApple('signUp'),
+    [loginWithApple]
+  );
+
+  const completeAppleAuth = useCallback(
+    async (payload: AppleSignInPayload, intent: AuthIntent = 'signIn') => {
+      const profile = await finishAppleSignIn(payload, intent);
+      await clearActiveGroupSession(profile.id);
+      setUser(profile);
+      return profile;
+    },
+    []
+  );
 
   const linkGoogleWithPasswordHandler = useCallback(
     async (email: string, password: string) => {
@@ -130,6 +177,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const linkGoogle = useCallback(async () => {
     await linkGoogleAccount();
+    await refreshLinkedProviders();
+  }, [refreshLinkedProviders]);
+
+  const linkApple = useCallback(async () => {
+    await linkAppleAccount();
     await refreshLinkedProviders();
   }, [refreshLinkedProviders]);
 
@@ -170,8 +222,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         register,
         loginWithGoogle,
+        loginWithApple,
+        signUpWithGoogle,
+        signUpWithApple,
+        completeAppleAuth,
         linkGoogleWithPassword: linkGoogleWithPasswordHandler,
         linkGoogle,
+        linkApple,
         setPassword,
         changeEmail,
         changePassword,

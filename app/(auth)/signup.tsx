@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   GoogleAccountLinkError,
   GoogleSignInCancelledError,
+  AppleAccountLinkError,
+  AppleSignInCancelledError,
   useAuth,
 } from '../../src/context/AuthContext';
 import { Input } from '../../src/components/Input';
@@ -20,6 +22,7 @@ import { Button } from '../../src/components/Button';
 import { AppLogoHeader } from '../../src/components/AppLogoHeader';
 import { AuthDivider } from '../../src/components/AuthDivider';
 import { GoogleSignInButton } from '../../src/components/GoogleSignInButton';
+import { AppleSignInButton } from '../../src/components/AppleSignInButton';
 import { LegalAcceptanceCheckbox } from '../../src/components/LegalAcceptanceCheckbox';
 import { PasswordStrengthIndicator } from '../../src/components/PasswordStrengthIndicator';
 import { PasswordRequirementsChecklist } from '../../src/components/PasswordRequirementsChecklist';
@@ -27,13 +30,14 @@ import { PasswordChecklist } from '../../src/components/PasswordChecklist';
 import { colors, spacing, typography } from '../../src/constants/theme';
 import { isFirebaseConfigured } from '../../src/config/firebase';
 import { isGoogleSignInAvailable, isGoogleSignInConfigured } from '../../src/config/googleSignIn';
+import { isAppleSignInAvailable } from '../../src/utils/appleSignIn';
 import {
   getPasswordMatchRequirement,
   validatePassword,
 } from '../../src/utils/passwordValidation';
 
 export default function SignUpScreen() {
-  const { register, loginWithGoogle } = useAuth();
+  const { user, register, signUpWithGoogle, completeAppleAuth } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -43,6 +47,7 @@ export default function SignUpScreen() {
   const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [errors, setErrors] = useState<{
     name?: string;
@@ -51,6 +56,19 @@ export default function SignUpScreen() {
     confirmPassword?: string;
     legal?: string;
   }>({});
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    isAppleSignInAvailable()
+      .then(setAppleAvailable)
+      .catch(() => setAppleAvailable(false));
+  }, []);
+
+  // Navigate after auth state updates — avoids racing router.replace before setUser re-renders.
+  useEffect(() => {
+    if (!user) return;
+    router.replace('/(app)' as Href);
+  }, [user]);
 
   const passwordValidation = useMemo(() => validatePassword(password), [password]);
   const passwordsMatch =
@@ -102,7 +120,6 @@ export default function SignUpScreen() {
     setLoading(true);
     try {
       await register(email.trim(), password, name.trim());
-      router.replace('/(app)' as Href);
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : 'Failed to create account';
@@ -131,26 +148,21 @@ export default function SignUpScreen() {
 
     if (!isGoogleSignInAvailable()) {
       appAlert(
-        'Google Sign-In not available',
-        'Install a LyVee preview or production build to sign in with Google. Expo Go is not supported.'
+        'Google Sign-Up not available',
+        'Install a LyVee preview or production build to sign up with Google. Expo Go is not supported.'
       );
       return;
     }
 
     setGoogleLoading(true);
     try {
-      await loginWithGoogle();
-      router.replace('/(app)' as Href);
+      await signUpWithGoogle();
     } catch (error: unknown) {
       if (error instanceof GoogleSignInCancelledError) {
         return;
       }
       if (error instanceof GoogleAccountLinkError) {
-        appAlert(
-          'Account already exists',
-          'Sign in with your password on the login screen to link Google to your account.'
-        );
-        router.replace('/(auth)/login' as Href);
+        appAlert('Account already exists', error.message);
         return;
       }
       const message =
@@ -159,6 +171,39 @@ export default function SignUpScreen() {
     } finally {
       setGoogleLoading(false);
     }
+  };
+
+  const beforeAppleSignUp = () => {
+    if (!acceptedLegal) {
+      setErrors((current) => ({
+        ...current,
+        legal: 'Please agree to the Terms of Use and Privacy Policy',
+      }));
+      return false;
+    }
+
+    if (!isFirebaseConfigured()) {
+      appAlert(
+        'Firebase not configured',
+        'Copy .env.example to .env and add your Firebase credentials.'
+      );
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleAppleSignUpError = (error: unknown) => {
+    if (error instanceof AppleSignInCancelledError) {
+      return;
+    }
+    if (error instanceof AppleAccountLinkError) {
+      appAlert('Account already exists', error.message);
+      return;
+    }
+    const message =
+      error instanceof Error ? error.message : 'Failed to sign up with Apple';
+    appAlert(message, 'If this keeps happening, Apple sign-in may need to be configured in Firebase, or you may already have a LyVee account — try Sign In instead.');
   };
 
   return (
@@ -255,14 +300,28 @@ export default function SignUpScreen() {
               disabled={!canSubmit}
               size="lg"
             />
-            {isGoogleSignInConfigured() ? (
+            {appleAvailable || isGoogleSignInConfigured() ? (
               <>
                 <AuthDivider />
-                <GoogleSignInButton
-                  onPress={handleGoogleSignUp}
-                  loading={googleLoading}
-                  disabled={loading || !acceptedLegal}
-                />
+                {appleAvailable ? (
+                  <AppleSignInButton
+                    type="signUp"
+                    beforeStart={beforeAppleSignUp}
+                    onAppleCredential={async (payload) => {
+                      await completeAppleAuth(payload, 'signUp');
+                    }}
+                    onAppleError={handleAppleSignUpError}
+                    disabled={loading || googleLoading}
+                  />
+                ) : null}
+                {isGoogleSignInConfigured() ? (
+                  <GoogleSignInButton
+                    type="signUp"
+                    onPress={handleGoogleSignUp}
+                    loading={googleLoading}
+                    disabled={loading}
+                  />
+                ) : null}
               </>
             ) : null}
           </View>
