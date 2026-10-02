@@ -1,0 +1,50 @@
+---
+description: Remember live store build numbers and how to update Firestore config/appUpdate for force-update.
+alwaysApply: true
+---
+
+# Store builds & force-update (`config/appUpdate`)
+
+## Live store builds (1.0.0)
+
+People can install these today. Do **not** set force-update mins to the next build until 1.0.1 is actually on that store.
+
+| Platform | Marketing version | Native build |
+|----------|-------------------|--------------|
+| **Android (Play)** | `1.0.0` | versionCode **25** |
+| **iOS (App Store)** | `1.0.0` | buildNumber **32** |
+
+**App Store numeric ID (iOS):** `6772774046`  
+**App Store URL:** `https://apps.apple.com/app/id6772774046`
+
+## Next build (1.0.1) — force update after it is live
+
+`app.json` / `package.json` marketing version is **`1.0.1`**. EAS production `autoIncrement` (remote source) assigns native builds. A second Android production build landed on **27** (user, 2026-10-01).
+
+| Platform | Build to require | Firestore field to set after it is installable |
+|----------|------------------|--------------------------------------------------|
+| **Android** | versionCode **27** | `minAndroidVersionCode: 27` |
+| **iOS** | buildNumber **33** (next production build from 32, unless rebuilt higher) | `minIosBuildNumber: 33` |
+
+Also set `minAppVersion: "1.0.1"` only after **both** stores the user cares about are serving 1.0.1. Setting any of these mins earlier blocks current installs with no newer build to download.
+
+### Firebase update status
+
+- **Done (2026-09-25):** `iosAppStoreId` = `"6772774046"` on `config/appUpdate`. Mins still unset (no force block).
+- **Pending:** after 1.0.1 is installable, set `minAndroidVersionCode: 27` and `minIosBuildNumber` to the iOS build that actually ships (expected 33). User asked for a force update (2026-10-01).
+
+## When the user asks to update Firebase after publish
+
+1. Confirm iOS and/or Android are actually live (or the builds above are the ones users install).
+2. Update `config/appUpdate` (public read; Console/Admin write only):
+   - Set `iosAppStoreId` to `"6772774046"` (or newer id if Apple changes it).
+   - **Do not** set `minAndroidVersionCode` / `minIosBuildNumber` / `minAppVersion` on day-1 launch unless they explicitly want a force update.
+   - Safe day-1 patch: keep existing `message`, set `iosAppStoreId`, leave mins unset (no hard block).
+3. Force-update later (only when a *newer* store build is installable):
+   - Example requiring current launch floor: `minAndroidVersionCode: 25`, `minIosBuildNumber: 32`
+   - Prefer setting mins to the *new* required build, not below what’s on the store.
+4. Android store URL needs no Firestore id (package `com.lyvee.app`). iOS needs `iosAppStoreId`.
+
+## Repo note
+
+`app.json` may still show older `buildNumber` / `versionCode` (e.g. 4); EAS `autoIncrement` means **store/EAS numbers above win** over `app.json` for force-update.

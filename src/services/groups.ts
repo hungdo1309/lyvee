@@ -23,7 +23,6 @@ import {
   isGroupOwner,
   normalizeGroup,
 } from '../utils/groupRoles';
-import { deleteItemsForGroup } from './items';
 import { cancelGroupBilling } from './billing';
 import { getGroup } from './groupLookup';
 import {
@@ -333,10 +332,11 @@ export async function deleteGroup(
   }
 
   await notifyGroupDeleted(group, requesterId);
-  await deleteItemsForGroup(groupId);
-  const { deleteExpenseGroupsForGroup } = await import('./expenseGroups');
-  await deleteExpenseGroupsForGroup(groupId);
   await cancelGroupBilling(groupId, requesterId);
+  // Invite goes first while the group still exists (rules require the owner).
+  // Items, trips, comments, and expense buckets — including the default one —
+  // are wiped by the cleanupDeletedGroup function after this delete. Those
+  // records stay individually protected.
   await deleteDoc(doc(db, 'invites', group.inviteCode));
   await deleteDoc(doc(db, 'groups', groupId));
 }

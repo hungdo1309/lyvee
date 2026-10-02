@@ -1,6 +1,6 @@
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentDeleted } = require('firebase-functions/v2/firestore');
 const { Expo } = require('expo-server-sdk');
 
 initializeApp();
@@ -50,6 +50,43 @@ async function resolveTokensFromUsers(db, recipientIds) {
 
   return [...new Set(tokens)];
 }
+
+async function deleteDocsByGroupId(db, collectionName, groupId) {
+  const snap = await db.collection(collectionName).where('groupId', '==', groupId).get();
+  for (const docSnap of snap.docs) {
+    await db.recursiveDelete(docSnap.ref);
+  }
+}
+
+/**
+ * Owner delete only removes the group doc from the client. Rules still block
+ * deleting the default expense bucket, other people's comments, and private
+ * items one by one. This runs with admin access after the group is gone.
+ */
+exports.cleanupDeletedGroup = onDocumentDeleted(
+  {
+    document: 'groups/{groupId}',
+    region: 'us-central1',
+    memory: '256MiB',
+    timeoutSeconds: 120,
+  },
+  async (event) => {
+    const groupId = event.params.groupId;
+    const deleted = event.data?.data() ?? {};
+    const db = getFirestore();
+
+    await deleteDocsByGroupId(db, 'items', groupId);
+    await deleteDocsByGroupId(db, 'expenseGroups', groupId);
+    await deleteDocsByGroupId(db, 'trips', groupId);
+    await deleteDocsByGroupId(db, 'overdueNotificationLocks', groupId);
+
+    if (typeof deleted.inviteCode === 'string' && deleted.inviteCode) {
+      await db.doc(`invites/${deleted.inviteCode}`).delete().catch((error) => {
+        console.warn('[groups] invite cleanup failed:', error);
+      });
+    }
+  }
+);
 
 exports.sendPushEvent = onDocumentCreated(
   {

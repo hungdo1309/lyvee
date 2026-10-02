@@ -601,6 +601,7 @@ service cloud.firestore {
     }
 
     // Public read: clients check min version before / without auth (force update).
+    // Writes are Console/Admin only — never open client writes in production.
     match /config/{docId} {
       allow read: if true;
       allow write: if false;
