@@ -357,13 +357,14 @@ export function computeOpenExpenseDebtSlices(
 }
 
 export interface ExpenseSettlementAllocation {
-  expenseId: string;
+  expenseId?: string;
   amountCents: number;
 }
 
 /**
- * Split a person-to-person payment across open expense slices oldest-first
- * (same order as unlinked settlement application / Balances partial hint).
+ * Split a person-to-person payment across open expenses between those two people,
+ * oldest first. Any leftover (simplified settle that is bigger than the direct IOU)
+ * is still returned so the full payment is recorded and nets stay in sync.
  */
 export function allocateSettlementToExpenses(
   expenses: Expense[],
@@ -388,6 +389,10 @@ export function allocateSettlementToExpenses(
     if (chunk <= 0) continue;
     allocations.push({ expenseId: slice.expenseId, amountCents: chunk });
     remaining -= chunk;
+  }
+
+  if (remaining > 0) {
+    allocations.push({ amountCents: remaining });
   }
 
   return allocations;

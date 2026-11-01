@@ -14,7 +14,7 @@ import { Button } from '../../../../src/components/Button';
 import { SettleConfirmPanel } from '../../../../src/components/SettleConfirmPanel';
 import { ExpensesIcon, EXPENSES_EMPTY_ICON_WRAP_SIZE, EXPENSES_ICON_SIZE } from '../../../../src/components/ExpensesIcon';
 import {
-  addSettlement,
+  addSettlements,
   subscribeToExpenseGroup,
   subscribeToExpenseGroupExpenses,
   subscribeToExpenseGroupSettlements,
@@ -27,6 +27,11 @@ import { Expense, ExpenseGroup, ExpenseSettlement } from '../../../../src/types/
 import { Trip } from '../../../../src/types/trips';
 import { formatExpenseMoney } from '../../../../src/utils/expenseMoney';
 import { allocateSettlementToExpenses } from '../../../../src/utils/expenseSplits';
+import {
+  getCachedSimplifyDebts,
+  loadSimplifyDebts,
+  saveSimplifyDebts,
+} from '../../../../src/utils/expensePreferences';
 import { canViewExpenseGroup } from '../../../../src/utils/expensePermissions';
 import { colors, layout, spacing, typography } from '../../../../src/constants/theme';
 
@@ -43,7 +48,9 @@ export default function ExpenseBalancesScreen() {
   const [recordingTransferKey, setRecordingTransferKey] = useState<string | null>(null);
   const [pendingSettleTransfer, setPendingSettleTransfer] = useState<BalanceTransfer | null>(null);
   const [settleError, setSettleError] = useState<string | null>(null);
-  const [simplifyDebts, setSimplifyDebts] = useState(false);
+  const [simplifyDebts, setSimplifyDebts] = useState(
+    () => (id ? getCachedSimplifyDebts(id) ?? false : false)
+  );
   const [paymentHistoryExpanded, setPaymentHistoryExpanded] = useState(false);
   const [balancesExpanded, setBalancesExpanded] = useState(false);
 
@@ -136,6 +143,23 @@ export default function ExpenseBalancesScreen() {
     }
   }, [hasUnsettledBalances]);
 
+  useEffect(() => {
+    if (!id) return;
+    const cached = getCachedSimplifyDebts(id);
+    if (cached != null) {
+      setSimplifyDebts(cached);
+      return;
+    }
+    void loadSimplifyDebts(id).then(setSimplifyDebts);
+  }, [id]);
+
+  const handleSimplifyDebtsChange = (value: boolean) => {
+    setSimplifyDebts(value);
+    if (id) {
+      void saveSimplifyDebts(id, value);
+    }
+  };
+
   const transferKey = (transfer: BalanceTransfer) =>
     `${transfer.fromUserId}-${transfer.toUserId}-${transfer.amountCents}`;
 
@@ -163,22 +187,20 @@ export default function ExpenseBalancesScreen() {
       );
 
       if (allocations.length === 0) {
-        throw new Error('No open expenses found for this payment');
+        throw new Error('Could not record this payment');
       }
 
-      for (const allocation of allocations) {
-        await addSettlement(
-          expenseGroup,
-          {
-            expenseId: allocation.expenseId,
-            fromUserId: pendingSettleTransfer.fromUserId,
-            toUserId: pendingSettleTransfer.toUserId,
-            amountCents: allocation.amountCents,
-            settlementDate,
-          },
-          user.id
-        );
-      }
+      await addSettlements(
+        expenseGroup,
+        allocations.map((allocation) => ({
+          expenseId: allocation.expenseId,
+          fromUserId: pendingSettleTransfer.fromUserId,
+          toUserId: pendingSettleTransfer.toUserId,
+          amountCents: allocation.amountCents,
+          settlementDate,
+        })),
+        user.id
+      );
       setPendingSettleTransfer(null);
     } catch (error) {
       setSettleError(error instanceof Error ? error.message : 'Failed to record payment');
@@ -246,11 +268,13 @@ export default function ExpenseBalancesScreen() {
             <View style={styles.simplifyRow}>
               <View style={styles.simplifyTextWrap}>
                 <Text style={styles.simplifyLabel}>Simplify debts</Text>
-                <Text style={styles.simplifyHint}>Combines debts between members</Text>
+                <Text style={styles.simplifyHint}>
+                  Off keeps what each person owes each other. On combines into fewer payments.
+                </Text>
               </View>
               <Switch
                 value={simplifyDebts}
-                onValueChange={setSimplifyDebts}
+                onValueChange={handleSimplifyDebtsChange}
                 trackColor={{ false: colors.border, true: colors.primaryMuted }}
                 thumbColor={simplifyDebts ? colors.primary : colors.surface}
                 ios_backgroundColor={colors.border}

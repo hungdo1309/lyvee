@@ -1,20 +1,38 @@
+import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-/** Numeric store build: Android versionCode / iOS CFBundleVersion. */
-export function getNativeBuildNumber(): number {
-  const raw = Constants.nativeBuildVersion;
-  const n = raw != null ? Number.parseInt(String(raw), 10) : NaN;
-  return Number.isFinite(n) ? n : 0;
+/** Store build only: a positive integer string. "1.0.0" and missing values are unreadable. */
+function parsePositiveBuild(raw: string | null | undefined): number | null {
+  if (raw == null) return null;
+  const trimmed = String(raw).trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const n = Number.parseInt(trimmed, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-/** Marketing version from the binary / app config (e.g. "1.0.0"). */
-export function getAppVersion(): string {
+/**
+ * Android versionCode / iOS CFBundleVersion.
+ * Null when the binary does not report one — callers must not treat that as outdated.
+ */
+export function getNativeBuildNumber(): number | null {
   return (
+    parsePositiveBuild(Application.nativeBuildVersion) ??
+    parsePositiveBuild(Constants.nativeBuildVersion)
+  );
+}
+
+/** Marketing version from the binary (e.g. "1.0.2"). Null when it cannot be read. */
+export function getAppVersion(): string | null {
+  const version =
+    Application.nativeApplicationVersion ||
     Constants.nativeApplicationVersion ||
     Constants.expoConfig?.version ||
-    '0.0.0'
-  );
+    null;
+  if (!version) return null;
+  const trimmed = version.trim();
+  if (!trimmed || trimmed === '0.0.0') return null;
+  return trimmed;
 }
 
 /** Compare semver-ish strings: -1 if a < b, 0 if equal, 1 if a > b. */
@@ -42,27 +60,28 @@ export function isBelowRequiredVersion(thresholds: UpdateThresholds): boolean {
   const build = getNativeBuildNumber();
   const version = getAppVersion();
 
-  if (Platform.OS === 'android') {
-    if (
-      typeof minAndroidVersionCode === 'number' &&
-      minAndroidVersionCode > 0 &&
-      build < minAndroidVersionCode
-    ) {
-      return true;
-    }
-  }
-
-  if (Platform.OS === 'ios') {
-    if (
-      typeof minIosBuildNumber === 'number' &&
-      minIosBuildNumber > 0 &&
-      build < minIosBuildNumber
-    ) {
-      return true;
-    }
+  if (
+    build != null &&
+    Platform.OS === 'android' &&
+    typeof minAndroidVersionCode === 'number' &&
+    minAndroidVersionCode > 0 &&
+    build < minAndroidVersionCode
+  ) {
+    return true;
   }
 
   if (
+    build != null &&
+    Platform.OS === 'ios' &&
+    typeof minIosBuildNumber === 'number' &&
+    minIosBuildNumber > 0 &&
+    build < minIosBuildNumber
+  ) {
+    return true;
+  }
+
+  if (
+    version != null &&
     typeof minAppVersion === 'string' &&
     minAppVersion.trim().length > 0 &&
     compareSemver(version, minAppVersion.trim()) < 0

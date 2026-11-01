@@ -57,7 +57,7 @@ function pairDebtKey(fromUserId: string, toUserId: string): string {
   return `${fromUserId}:${toUserId}`;
 }
 
-function adjustPairDebt(
+function addDirectedDebt(
   debts: Map<string, number>,
   fromUserId: string,
   toUserId: string,
@@ -66,26 +66,23 @@ function adjustPairDebt(
   if (fromUserId === toUserId || deltaCents === 0) return;
 
   const forwardKey = pairDebtKey(fromUserId, toUserId);
-  const reverseKey = pairDebtKey(toUserId, fromUserId);
-  const reverseAmount = debts.get(reverseKey) ?? 0;
-
-  if (reverseAmount > 0) {
-    if (deltaCents >= reverseAmount) {
-      debts.delete(reverseKey);
-      const remainder = deltaCents - reverseAmount;
-      if (remainder > 0) {
-        debts.set(forwardKey, (debts.get(forwardKey) ?? 0) + remainder);
-      }
-    } else {
-      debts.set(reverseKey, reverseAmount - deltaCents);
-    }
+  const next = (debts.get(forwardKey) ?? 0) + deltaCents;
+  if (next > 0) {
+    debts.set(forwardKey, next);
     return;
   }
 
-  debts.set(forwardKey, (debts.get(forwardKey) ?? 0) + deltaCents);
+  debts.delete(forwardKey);
+  if (next < 0) {
+    const reverseKey = pairDebtKey(toUserId, fromUserId);
+    debts.set(reverseKey, (debts.get(reverseKey) ?? 0) - next);
+  }
 }
 
-/** Per-expense debts without combining members' balances (Splitwise "simplify off"). */
+/**
+ * One row per direction between two people. Multiple expenses in the same
+ * direction are combined; A→B and B→A stay separate (simplify off).
+ */
 export function computeDirectBalanceTransfers(
   expenseGroup: Pick<ExpenseGroup, 'memberIds'>,
   expenses: Expense[],
@@ -97,13 +94,13 @@ export function computeDirectBalanceTransfers(
     const portions = computeExpensePortionsCents(expense, expenseGroup.memberIds);
     for (const [userId, portionCents] of portions) {
       if (userId !== expense.paidByUserId && portionCents > 0) {
-        adjustPairDebt(debts, userId, expense.paidByUserId, portionCents);
+        addDirectedDebt(debts, userId, expense.paidByUserId, portionCents);
       }
     }
   }
 
   for (const settlement of settlements) {
-    adjustPairDebt(debts, settlement.fromUserId, settlement.toUserId, -settlement.amountCents);
+    addDirectedDebt(debts, settlement.fromUserId, settlement.toUserId, -settlement.amountCents);
   }
 
   const transfers: BalanceTransfer[] = [];
@@ -160,4 +157,24 @@ export function simplifyBalanceTransfers(balances: MemberBalance[]): BalanceTran
   }
 
   return transfers;
+}
+
+/** Settlements move nets the opposite way of "from paid to", so swap simplify's endpoints. */
+export function transfersToRestoreNets(
+  memberIds: string[],
+  before: MemberBalance[],
+  after: MemberBalance[]
+): BalanceTransfer[] {
+  const deltas: MemberBalance[] = memberIds.map((userId) => ({
+    userId,
+    netCents:
+      (before.find((entry) => entry.userId === userId)?.netCents ?? 0) -
+      (after.find((entry) => entry.userId === userId)?.netCents ?? 0),
+  }));
+
+  return simplifyBalanceTransfers(deltas).map((transfer) => ({
+    fromUserId: transfer.toUserId,
+    toUserId: transfer.fromUserId,
+    amountCents: transfer.amountCents,
+  }));
 }

@@ -187,9 +187,17 @@ export default function ExpenseGroupDetailScreen() {
 
   const handleDeleteExpense = (expense: Expense) => {
     if (!expenseGroup || !user) return;
+    const fullySettled = isExpenseFullySettled(
+      expense,
+      expenseGroup.memberIds,
+      expenses,
+      settlements
+    );
     appAlert(
       'Delete expense?',
-      `"${expense.description}" will be removed. Balances and what people still owe stay the same.`,
+      fullySettled
+        ? `"${expense.description}" will be removed. It is already settled, so balances stay the same.`
+        : `"${expense.description}" will be removed. Remaining amounts owed for this expense will be dropped.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {

@@ -27,24 +27,24 @@ import {
 import { Trip } from '../types/trips';
 import { stripUndefined } from '../utils/firestore';
 import {
-  computeMemberBalances,
-  simplifyBalanceTransfers,
-} from '../utils/expenseBalances';
-import {
   canDeleteExpenseGroup,
   canEditExpenseGroup,
   canViewExpenseGroup,
   normalizeExpenseMemberIds,
   resolveTripExpenseMemberIds,
 } from '../utils/expensePermissions';
+import {
+  computeMemberBalances,
+  transfersToRestoreNets,
+} from '../utils/expenseBalances';
 import { membersMatch } from '../utils/expenses';
-import { validateExpenseSplit } from '../utils/expenseSplits';
+import { isExpenseFullySettled, validateExpenseSplit } from '../utils/expenseSplits';
 import { getGroup } from './groupLookup';
 import { getTrip } from './trips';
 import {
   notifyExpenseCreated,
   notifyExpenseDeleted,
-  notifyExpenseSettlementAdded,
+  notifyExpensePaymentRecorded,
   notifyExpenseSettlementRemoved,
   notifyExpenseUpdated,
   notifyTripExpenseGroupCreated,
@@ -134,6 +134,17 @@ function parseSettlement(
     createdAt: String(data.createdAt ?? ''),
     updatedAt: String(data.updatedAt ?? ''),
   };
+}
+
+function parseSettlementsFromDocs(
+  expenseGroupId: string,
+  docs: { id: string; data: () => unknown }[]
+): ExpenseSettlement[] {
+  return sortSettlements(
+    docs.map((entry) =>
+      parseSettlement(entry.id, expenseGroupId, entry.data() as Record<string, unknown>)
+    )
+  );
 }
 
 function sortExpenseGroups(groups: ExpenseGroup[]): ExpenseGroup[] {
@@ -655,11 +666,7 @@ export async function fetchExpenseGroupSettlementsOnce(
   const snapshot = await getDocs(
     collection(db, 'expenseGroups', expenseGroupId, 'settlements')
   );
-  return sortSettlements(
-    snapshot.docs.map((entry) =>
-      parseSettlement(entry.id, expenseGroupId, entry.data() as Record<string, unknown>)
-    )
-  );
+  return parseSettlementsFromDocs(expenseGroupId, snapshot.docs);
 }
 
 export function subscribeToExpenseGroupExpenses(
@@ -695,13 +702,7 @@ export function subscribeToExpenseGroupSettlements(
   return onSnapshot(
     collection(db, 'expenseGroups', expenseGroupId, 'settlements'),
     (snapshot) => {
-      onSettlements(
-        sortSettlements(
-          snapshot.docs.map((entry) =>
-            parseSettlement(entry.id, expenseGroupId, entry.data() as Record<string, unknown>)
-          )
-        )
-      );
+      onSettlements(parseSettlementsFromDocs(expenseGroupId, snapshot.docs));
     },
     (error) => {
       console.warn(
@@ -908,9 +909,8 @@ export async function updateExpense(
 }
 
 /**
- * Hard-deletes an expense without changing who owes whom.
- * Removes the expense and its linked settlements, then writes balance-adjustment
- * settlements so member nets match what they were before the delete.
+ * Deletes an expense and payments recorded for it.
+ * Settled expenses keep member nets the same. Unsettled expenses drop remaining debt.
  */
 export async function deleteExpense(
   expenseGroup: ExpenseGroup,
@@ -941,13 +941,6 @@ export async function deleteExpense(
     fetchExpenseGroupExpensesOnce(expenseGroup.id),
     fetchExpenseGroupSettlementsOnce(expenseGroup.id),
   ]);
-
-  const beforeBalances = computeMemberBalances(
-    expenseGroup,
-    allExpenses,
-    allSettlements
-  );
-
   const linkedSettlements = allSettlements.filter(
     (settlement) => settlement.expenseId === expenseId
   );
@@ -955,31 +948,14 @@ export async function deleteExpense(
   const remainingSettlements = allSettlements.filter(
     (settlement) => settlement.expenseId !== expenseId
   );
-
-  const afterBalances = computeMemberBalances(
-    expenseGroup,
-    remainingExpenses,
-    remainingSettlements
+  const wasSettled = isExpenseFullySettled(
+    expense,
+    expenseGroup.memberIds,
+    allExpenses,
+    allSettlements
   );
 
-  const balanceDeltas = expenseGroup.memberIds.map((memberId) => ({
-    userId: memberId,
-    netCents:
-      (beforeBalances.find((entry) => entry.userId === memberId)?.netCents ?? 0) -
-      (afterBalances.find((entry) => entry.userId === memberId)?.netCents ?? 0),
-  }));
-
-  // simplify gives debtor→creditor transfers for the delta nets; settlements move
-  // nets the opposite way of "from paid to", so swap endpoints to restore balances.
-  const restoreTransfers = simplifyBalanceTransfers(balanceDeltas);
-  const settlementDate = new Date().toISOString().slice(0, 10);
   const now = new Date().toISOString();
-  const noteBase = `Balance kept after removing "${expense.description}"`;
-  const restoreNote =
-    noteBase.length <= MAX_SETTLEMENT_NOTE_LENGTH
-      ? noteBase
-      : `${noteBase.slice(0, MAX_SETTLEMENT_NOTE_LENGTH - 1)}…`;
-
   const batch = writeBatch(db);
   batch.delete(expenseRef);
 
@@ -989,22 +965,37 @@ export async function deleteExpense(
     );
   }
 
-  for (const transfer of restoreTransfers) {
-    if (transfer.amountCents <= 0) continue;
-    const id = doc(collection(db, 'expenseGroups', expenseGroup.id, 'settlements')).id;
-    batch.set(
-      doc(db, 'expenseGroups', expenseGroup.id, 'settlements', id),
-      stripUndefined({
-        fromUserId: transfer.toUserId,
-        toUserId: transfer.fromUserId,
-        amountCents: transfer.amountCents,
-        settlementDate,
-        note: restoreNote,
-        createdBy: userId,
-        createdAt: now,
-        updatedAt: now,
-      })
+  if (wasSettled) {
+    const restoreTransfers = transfersToRestoreNets(
+      expenseGroup.memberIds,
+      computeMemberBalances(expenseGroup, allExpenses, allSettlements),
+      computeMemberBalances(expenseGroup, remainingExpenses, remainingSettlements)
     );
+    const settlementDate = now.slice(0, 10);
+    const noteBase = `Balance kept after removing settled "${expense.description}"`;
+    const restoreNote =
+      noteBase.length <= MAX_SETTLEMENT_NOTE_LENGTH
+        ? noteBase
+        : `${noteBase.slice(0, MAX_SETTLEMENT_NOTE_LENGTH - 1)}…`;
+
+    for (const transfer of restoreTransfers) {
+      if (transfer.amountCents <= 0) continue;
+      const id = doc(collection(db, 'expenseGroups', expenseGroup.id, 'settlements')).id;
+      batch.set(
+        doc(db, 'expenseGroups', expenseGroup.id, 'settlements', id),
+        stripUndefined({
+          expenseId,
+          fromUserId: transfer.fromUserId,
+          toUserId: transfer.toUserId,
+          amountCents: transfer.amountCents,
+          settlementDate,
+          note: restoreNote,
+          createdBy: userId,
+          createdAt: now,
+          updatedAt: now,
+        })
+      );
+    }
   }
 
   batch.set(
@@ -1017,11 +1008,14 @@ export async function deleteExpense(
   await notifyExpenseDeleted(expenseGroup, expense, userId, trip);
 }
 
-export async function addSettlement(
+export async function addSettlements(
   expenseGroup: ExpenseGroup,
-  input: ExpenseSettlementInput,
-  userId: string
-): Promise<string> {
+  inputs: ExpenseSettlementInput[],
+  userId: string,
+  options?: { notify?: boolean }
+): Promise<string[]> {
+  if (inputs.length === 0) return [];
+
   const group = await getGroup(expenseGroup.groupId);
   if (!group) {
     throw new Error('Group not found');
@@ -1031,13 +1025,29 @@ export async function addSettlement(
     throw new Error('You do not have access to this expense group');
   }
 
-  const normalized = validateSettlementInput(input, expenseGroup.memberIds);
-  const id = doc(collection(db, 'expenseGroups', expenseGroup.id, 'settlements')).id;
   const now = new Date().toISOString();
+  const settlements: ExpenseSettlement[] = [];
 
-  await setDoc(
-    doc(db, 'expenseGroups', expenseGroup.id, 'settlements', id),
-    stripUndefined({
+  for (const input of inputs) {
+    const normalized = validateSettlementInput(input, expenseGroup.memberIds);
+    const id = doc(collection(db, 'expenseGroups', expenseGroup.id, 'settlements')).id;
+    await setDoc(
+      doc(db, 'expenseGroups', expenseGroup.id, 'settlements', id),
+      stripUndefined({
+        expenseId: normalized.expenseId,
+        fromUserId: normalized.fromUserId,
+        toUserId: normalized.toUserId,
+        amountCents: normalized.amountCents,
+        settlementDate: normalized.settlementDate,
+        note: normalized.note,
+        createdBy: userId,
+        createdAt: now,
+        updatedAt: now,
+      })
+    );
+    settlements.push({
+      id,
+      expenseGroupId: expenseGroup.id,
       expenseId: normalized.expenseId,
       fromUserId: normalized.fromUserId,
       toUserId: normalized.toUserId,
@@ -1047,8 +1057,8 @@ export async function addSettlement(
       createdBy: userId,
       createdAt: now,
       updatedAt: now,
-    })
-  );
+    });
+  }
 
   await setDoc(
     doc(db, 'expenseGroups', expenseGroup.id),
@@ -1056,21 +1066,32 @@ export async function addSettlement(
     { merge: true }
   );
 
-  const settlement: ExpenseSettlement = {
-    id,
-    expenseGroupId: expenseGroup.id,
-    expenseId: normalized.expenseId,
-    fromUserId: normalized.fromUserId,
-    toUserId: normalized.toUserId,
-    amountCents: normalized.amountCents,
-    settlementDate: normalized.settlementDate,
-    note: normalized.note,
-    createdBy: userId,
-    createdAt: now,
-    updatedAt: now,
-  };
-  await notifyExpenseSettlementAdded(expenseGroup, settlement, userId, trip);
+  if (options?.notify !== false) {
+    const first = settlements[0];
+    await notifyExpensePaymentRecorded(
+      expenseGroup,
+      {
+        id: first.id,
+        fromUserId: first.fromUserId,
+        toUserId: first.toUserId,
+        amountCents: settlements.reduce((sum, entry) => sum + entry.amountCents, 0),
+        expenseId: settlements.length === 1 ? first.expenseId : undefined,
+      },
+      userId,
+      trip
+    );
+  }
 
+  return settlements.map((entry) => entry.id);
+}
+
+export async function addSettlement(
+  expenseGroup: ExpenseGroup,
+  input: ExpenseSettlementInput,
+  userId: string,
+  options?: { notify?: boolean }
+): Promise<string> {
+  const [id] = await addSettlements(expenseGroup, [input], userId, options);
   return id;
 }
 

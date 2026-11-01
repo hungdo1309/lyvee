@@ -6,7 +6,8 @@ import { Card } from './Card';
 import { Button } from './Button';
 import { SettleConfirmPanel } from './SettleConfirmPanel';
 import { ExpensesIcon } from './ExpensesIcon';
-import { addSettlement } from '../services/expenseGroups';
+import { addSettlements } from '../services/expenseGroups';
+import { notifyExpensePaymentRecorded } from '../services/expenseNotifications';
 import { formatExpenseMoney } from '../utils/expenseMoney';
 import { allocateSettlementToExpenses } from '../utils/expenseSplits';
 import {
@@ -77,21 +78,23 @@ export function HomeUnsettledExpensesSection({
         );
 
         if (expenseAllocations.length === 0) {
-          throw new Error('No open expenses found for this payment');
+          throw new Error('Could not record this payment');
         }
 
+        await addSettlements(
+          expenseGroup,
+          expenseAllocations.map((expenseAllocation) => ({
+            expenseId: expenseAllocation.expenseId,
+            fromUserId: viewerUserId,
+            toUserId: pendingEntry.toUserId,
+            amountCents: expenseAllocation.amountCents,
+            settlementDate,
+          })),
+          viewerUserId,
+          { notify: false }
+        );
+
         for (const expenseAllocation of expenseAllocations) {
-          await addSettlement(
-            expenseGroup,
-            {
-              expenseId: expenseAllocation.expenseId,
-              fromUserId: viewerUserId,
-              toUserId: pendingEntry.toUserId,
-              amountCents: expenseAllocation.amountCents,
-              settlementDate,
-            },
-            viewerUserId
-          );
           groupSettlements.push({
             id: 'pending',
             expenseGroupId: expenseGroup.id,
@@ -108,6 +111,19 @@ export function HomeUnsettledExpensesSection({
 
         workingSettlements.set(expenseGroup.id, groupSettlements);
         touchedIds.push(expenseGroup.id);
+      }
+
+      const notifyGroup = groupAllocations[0]?.expenseGroup;
+      if (notifyGroup) {
+        await notifyExpensePaymentRecorded(
+          notifyGroup,
+          {
+            fromUserId: viewerUserId,
+            toUserId: pendingEntry.toUserId,
+            amountCents,
+          },
+          viewerUserId
+        );
       }
 
       setPendingEntryKey(null);

@@ -5,33 +5,29 @@ alwaysApply: true
 
 # Store builds & force-update (`config/appUpdate`)
 
-## Live store builds (1.0.0)
+## Live store builds (1.0.1, as of 2026-10-02)
 
-People can install these today. Do **not** set force-update mins to the next build until 1.0.1 is actually on that store.
+| Platform | Marketing version | Native build | Firestore minimum |
+|----------|-------------------|--------------|-------------------|
+| **Android (Play)** | `1.0.1` | versionCode **27** | unset (do not set 27) |
+| **iOS (App Store)** | `1.0.1` | buildNumber **33** | unset (do not set 33) |
 
-| Platform | Marketing version | Native build |
-|----------|-------------------|--------------|
-| **Android (Play)** | `1.0.0` | versionCode **25** |
-| **iOS (App Store)** | `1.0.0` | buildNumber **32** |
+## Next release in review / EAS (1.0.2, as of 2026-11-01)
+
+| Platform | Marketing version | Native build | Set after this is live |
+|----------|-------------------|--------------|------------------------|
+| **Android (Play)** | `1.0.2` | versionCode **29** | `minAndroidVersionCode: 29` |
+| **iOS (App Store)** | `1.0.2` | buildNumber **36** | `minIosBuildNumber: 36` |
 
 **App Store numeric ID (iOS):** `6772774046`  
 **App Store URL:** `https://apps.apple.com/app/id6772774046`
 
-## Next build (1.0.1) — force update after it is live
-
-`app.json` / `package.json` marketing version is **`1.0.1`**. EAS production `autoIncrement` (remote source) assigns native builds. A second Android production build landed on **27** (user, 2026-10-01).
-
-| Platform | Build to require | Firestore field to set after it is installable |
-|----------|------------------|--------------------------------------------------|
-| **Android** | versionCode **27** | `minAndroidVersionCode: 27` |
-| **iOS** | buildNumber **33** (next production build from 32, unless rebuilt higher) | `minIosBuildNumber: 33` |
-
-Also set `minAppVersion: "1.0.1"` only after **both** stores the user cares about are serving 1.0.1. Setting any of these mins earlier blocks current installs with no newer build to download.
-
 ### Firebase update status
 
-- **Done (2026-09-25):** `iosAppStoreId` = `"6772774046"` on `config/appUpdate`. Mins still unset (no force block).
-- **Pending:** after 1.0.1 is installable, set `minAndroidVersionCode: 27` and `minIosBuildNumber` to the iOS build that actually ships (expected 33). User asked for a force update (2026-10-01).
+- **Cleared (2026-10-02):** force-update mins are off. `iosAppStoreId` remains `"6772774046"`. Live installs are still Android **27** and iOS **33**.
+- **Do not** set mins on 1.0.1 (`27` / `33`). Those binaries misread the build number and blocked themselves.
+- **1.0.2** reads `Application.nativeBuildVersion` from `expo-application` and fails open if the number is missing. EAS builds: Android **29**, iOS **36**.
+- **After 1.0.2 is live on both stores:** set `minAndroidVersionCode: 29` and `minIosBuildNumber: 36`. Leave `minAppVersion` unset. Do not set mins before users can install 29/36.
 
 ## When the user asks to update Firebase after publish
 
